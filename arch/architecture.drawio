@@ -1,6 +1,6 @@
 <mxfile host="65bd71144e">
     <diagram id="sJbom_5L6VdSvB-PTzJs" name="Page-1">
-        <mxGraphModel dx="1713" dy="1147" grid="1" gridSize="10" guides="1" tooltips="1" connect="1" arrows="1" fold="1" page="1" pageScale="1" pageWidth="850" pageHeight="1100" math="0" shadow="0">
+        <mxGraphModel dx="2583" dy="757" grid="1" gridSize="10" guides="1" tooltips="1" connect="1" arrows="1" fold="1" page="1" pageScale="1" pageWidth="850" pageHeight="1100" math="0" shadow="0">
             <root>
                 <mxCell id="0"/>
                 <mxCell id="1" parent="0"/>
@@ -50,7 +50,7 @@
                 <mxCell id="19" value="TTS" style="rounded=0;whiteSpace=wrap;html=1;" parent="1" vertex="1">
                     <mxGeometry x="120" y="820" width="120" height="60" as="geometry"/>
                 </mxCell>
-                <mxCell id="29" style="edgeStyle=none;html=1;entryX=0.981;entryY=0.499;entryDx=0;entryDy=0;entryPerimeter=0;" parent="1" source="21" target="28" edge="1">
+                <mxCell id="29" style="edgeStyle=none;html=1;entryX=1;entryY=0.5;entryDx=0;entryDy=0;" parent="1" source="21" target="37" edge="1">
                     <mxGeometry relative="1" as="geometry">
                         <Array as="points">
                             <mxPoint x="745" y="1310"/>
@@ -61,7 +61,7 @@
                     <mxGeometry x="550" y="940" width="390" height="230" as="geometry"/>
                 </mxCell>
                 <mxCell id="22" value="Audio queue" style="text;html=1;align=center;verticalAlign=middle;resizable=0;points=[];autosize=1;strokeColor=none;fillColor=none;" parent="1" vertex="1">
-                    <mxGeometry x="710" y="890" width="90" height="30" as="geometry"/>
+                    <mxGeometry x="700" y="890" width="90" height="30" as="geometry"/>
                 </mxCell>
                 <mxCell id="25" value="" style="pointerEvents=1;verticalLabelPosition=bottom;shadow=0;dashed=0;align=center;html=1;verticalAlign=top;shape=mxgraph.electrical.waveforms.sine_wave;" parent="1" vertex="1">
                     <mxGeometry x="345" y="1020" width="80" height="36.18" as="geometry"/>
@@ -75,7 +75,7 @@
                 <mxCell id="15" value="" style="rounded=1;whiteSpace=wrap;html=1;" parent="1" vertex="1">
                     <mxGeometry x="550" y="495" width="390" height="230" as="geometry"/>
                 </mxCell>
-                <mxCell id="36" value="END" style="shape=cube;whiteSpace=wrap;html=1;boundedLbl=1;backgroundOutline=1;darkOpacity=0.05;darkOpacity2=0.1;size=10;" vertex="1" parent="1">
+                <mxCell id="36" value="END" style="shape=cube;whiteSpace=wrap;html=1;boundedLbl=1;backgroundOutline=1;darkOpacity=0.05;darkOpacity2=0.1;size=10;" parent="1" vertex="1">
                     <mxGeometry x="590" y="630" width="90" height="30" as="geometry"/>
                 </mxCell>
                 <mxCell id="13" value="Sentence4" style="shape=cube;whiteSpace=wrap;html=1;boundedLbl=1;backgroundOutline=1;darkOpacity=0.05;darkOpacity2=0.1;size=10;" parent="1" vertex="1">
@@ -89,6 +89,12 @@
                 </mxCell>
                 <mxCell id="16" value="Text queue" style="text;html=1;align=center;verticalAlign=middle;resizable=0;points=[];autosize=1;strokeColor=none;fillColor=none;" parent="1" vertex="1">
                     <mxGeometry x="705" y="460" width="80" height="30" as="geometry"/>
+                </mxCell>
+                <mxCell id="38" style="edgeStyle=none;html=1;entryX=1;entryY=0.5;entryDx=0;entryDy=0;entryPerimeter=0;" edge="1" parent="1" source="37" target="28">
+                    <mxGeometry relative="1" as="geometry"/>
+                </mxCell>
+                <mxCell id="37" value="Speaker" style="rounded=0;whiteSpace=wrap;html=1;" vertex="1" parent="1">
+                    <mxGeometry x="120" y="1280" width="120" height="60" as="geometry"/>
                 </mxCell>
             </root>
         </mxGraphModel>

@@ -15,18 +15,38 @@ from pygame import mixer
 from collections import deque
 from typing import Optional, List, Dict, Any, Union
 
+def get_logger(logger_name=__name__):
+    # 日志收集器
+    logger = logging.getLogger(logger_name)
+    logger.setLevel(logging.DEBUG)
+    
+    # Avoid passing messages to the root logger
+    logger.propagate = False
+    
+    # If the logger already has handlers, avoid adding duplicate ones
+    if not logger.hasHandlers():
+        # 设置控制台处理器，当logger被调用时，控制台处理器额外输出被调用的位置。
+        # 创建一个控制台处理器并设置级别为DEBUG
+        ch = logging.StreamHandler()
+        ch.setLevel(logging.DEBUG)
+        # 创建一个格式化器，并设置格式包括文件名和行号
+        formatter = logging.Formatter('%(asctime)s - %(name)s - %(levelname)s - %(pathname)s:%(lineno)d - %(message)s')
+        ch.setFormatter(formatter)
+
+        # 将处理器添加到logger
+        logger.addHandler(ch)
+
+    return logger
+
 def generate_random_filename(length=30, extension=".txt"):
     return ''.join(random.choices(string.ascii_lowercase + string.digits, k=length)) + extension
 
 def tts(
         text
 ):
-    with open(os.path.join(os.path.dirname(os.path.abspath(__file__)), 'config.json')) as F:
-        args = json.load(F)
-        
-        # 填写平台申请的appid, access_token以及cluster
-        appid = args["zijie_tts_app_id"]
-        access_token= args["zijie_tts_access_token"]
+    # 填写平台申请的appid, access_token以及cluster
+    appid = os.environ.get("zijie_tts_app_id")
+    access_token= os.environ.get("zijie_tts_access_token")
 
     cluster = "volcano_tts"
 
@@ -96,7 +116,6 @@ class AudioProducer(threading.Thread):
                 break
             self.audio_queue.append(tts(sentence))
 
-
 class AudioConsumer(threading.Thread):
     def __init__(self, audio_queue:deque, daemon=True):
         '''
@@ -125,4 +144,8 @@ class AudioConsumer(threading.Thread):
         mixer.quit()
 
 if __name__ == '__main__':
+    if not os.environ.get("zijie_tts_app_id"):
+        logger = get_logger("tts_key_checker")
+        logger.error("Please set your APP ID and access token in the environment variables zijie_tts_app_id and tts_key_checker")
+        exit(1)
     tts("中国，全称中华人民共和国，位于亚洲东部，太平洋西岸，是世界上人口最多的国家之一，拥有超过五千年的悠久历史和灿烂文化。中国疆域辽阔，陆地面积约为960万平方千米，地域多样，从东部的平原、丘陵到西部的高原、山脉，自然景观丰富。")

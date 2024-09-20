@@ -21,24 +21,27 @@ transform_res = {'sentence':None}                       # 转写结果记录,记
 recognition_active = False                 # 是否开始实时语音识别的标志,第一次点击麦克风按钮会设置为True,第二次点击会设置为False
 stt_thread = None                          # 语音识别运行线程, 得当作全局变量,否则第二次运行的时候,会识别不到这个变量,因为其只在lingji_stt_gradio函数的if语句中被初始化了,第二次运行的时候(即第二次点击的时候),会进入else分支,然后发生找不到这个变量的错误,设置为全局变量可以解决这个问题.
 
-with open(os.path.join(os.path.dirname(os.path.abspath(__file__)), 'config.json')) as F:
-    dashscope.api_key=json.load(F)['lingji_key']
-    
-def get_logger():
+
+def get_logger(logger_name=__name__):
     # 日志收集器
-    logger = logging.getLogger(__name__)
+    logger = logging.getLogger(logger_name)
     logger.setLevel(logging.DEBUG)
     
-    # 设置控制台处理器，当logger被调用时，控制台处理器额外输出被调用的位置。
-    # 创建一个控制台处理器并设置级别为DEBUG
-    ch = logging.StreamHandler()
-    ch.setLevel(logging.DEBUG)
-    # 创建一个格式化器，并设置格式包括文件名和行号
-    formatter = logging.Formatter('%(asctime)s - %(name)s - %(levelname)s - %(pathname)s:%(lineno)d - %(message)s')
-    ch.setFormatter(formatter)
+    # Avoid passing messages to the root logger
+    logger.propagate = False
+    
+    # If the logger already has handlers, avoid adding duplicate ones
+    if not logger.hasHandlers():
+        # 设置控制台处理器，当logger被调用时，控制台处理器额外输出被调用的位置。
+        # 创建一个控制台处理器并设置级别为DEBUG
+        ch = logging.StreamHandler()
+        ch.setLevel(logging.DEBUG)
+        # 创建一个格式化器，并设置格式包括文件名和行号
+        formatter = logging.Formatter('%(asctime)s - %(name)s - %(levelname)s - %(pathname)s:%(lineno)d - %(message)s')
+        ch.setFormatter(formatter)
 
-    # 将处理器添加到logger
-    logger.addHandler(ch)
+        # 将处理器添加到logger
+        logger.addHandler(ch)
 
     return logger
 
@@ -174,7 +177,9 @@ def lingji_stt_gradio_va() -> str:
     拥有语音唤醒功能的实时文本转语音函数
     '''
     global recognition, recognition_active, stream, stt_thread,transform_res
-
+    
+    dashscope.api_key=os.environ.get('lingji_key')
+    
     # 麦克风准备
     # Recognition.SILENCE_TIMEOUT_S = 200      
     # kwargs = {REQUEST_TIMEOUT_KEYWORD: 120}
@@ -209,5 +214,9 @@ def lingji_stt_gradio_va() -> str:
 
 
 if __name__ == "__main__":
+    if dashscope.api_key is None:
+        logger = get_logger("stt_key_checker")
+        logger.error("Please set your DashScope API key in the environment variable DASH_SCOPE_API_KEY")
+        exit(1)
     lingji_stt_gradio_va()
 

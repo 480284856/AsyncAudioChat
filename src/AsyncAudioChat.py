@@ -6,9 +6,9 @@ import logging
 import threading
 
 from pygame import mixer
-from zijie_tts import tts
+from .zijie_tts import tts
 from langchain_ollama import ChatOllama 
-from ali_stt_voice_awake import lingji_stt_gradio_va
+from .ali_stt_voice_awake import lingji_stt_gradio_va
 END = None  # 使用None表示结束标识符
 
 def get_logger():
@@ -123,14 +123,7 @@ class LLM(threading.Thread):
             return s
         
     def run(self) -> None:
-        while True:
-            if self.text['text']:
-                self.query = self.text['text']
-                break
-            else:
-                LOGGER.info("waiting for audio input...")
-                time.sleep(0.1)
-                
+        self.query = self.text['text']
         response_iterator = self._run(self.query, *(self.args_for_run), **(self.kwargs_for_run))
 
         self._run2(response_iterator, *(self.args_for_run), **(self.kwargs_for_run))
@@ -186,25 +179,28 @@ class Speaker(threading.Thread):
 
 def main():
     with open(os.path.join(os.path.dirname(os.path.abspath(__file__)), 'config.json')) as F:
-        args = json.load(F)['lingji_key']
+        args = json.load(F)
         ollama_model_name = args['model_name']
         ollama_base_url = args['llm_url']
+        for key,value in args.items():
+            os.environ[key] = value
     
     text = {"text": None}
     text_queue = queue.Queue()
     audio_queue = queue.Queue()
 
     stt_thread = threading.Thread(target=stt, args=(lingji_stt_gradio_va,text), daemon=True)
+
+    stt_thread.start()
+    stt_thread.join()
+    
     llm_thread = LLM(text, text_queue, ollama_model_name=ollama_model_name, ollama_base_url=ollama_base_url)
     audio_thread = TTS(text_queue, audio_queue)
     speaker_thread = Speaker(audio_queue)
 
-    stt_thread.start()
     llm_thread.start()
     audio_thread.start()
     speaker_thread.start()
-
-    stt_thread.join()
     llm_thread.join()
     audio_thread.join()
     speaker_thread.join()
