@@ -11,6 +11,22 @@
 
 ![alt text](arch/architecture.png)
 
+## 快速开始
+首先，你需要在`src`文件夹中创建`config.json`文件并填写如下信息：
+```json
+{
+    "lingji_key": "sk-xxx",            // 阿里云的灵积语音服务的api key                             
+    "llm_url": "192.168.65.254:62707", // 模型的url，这里需要是使用Ollama部署的模型
+    "model_name": "qwen2:0.5b",        // 模型的名称
+    "zijie_tts_app_id": "xxx",         // 字节跳动的火山引擎的语音合成服务的app id
+    "zijie_tts_access_token": "xxx"    // 字节跳动的火山引擎的语音合成服务的access token
+}
+```
+最后，你需要使用python 3.11 来安装依赖，并运行服务：
+```bash
+pip install -r requirements.txt
+python src/main.py
+```
 ## 模块设计规范
 这里给出各个模块的设计标准，以便使用不同的云服务或本地服务。
 ### STT

@@ -6,7 +6,6 @@ import logging
 import pyaudio
 import threading
 import dashscope
-import gradio as gr
 import speech_recognition as sr
 
 from http import HTTPStatus
