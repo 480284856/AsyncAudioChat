@@ -17,7 +17,7 @@ from alibabacloud_alimt20181012.client import Client as alimt20181012Client
 sys.path.append(
     os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 )
-from src.AsyncAudioChat import *
+from src.AsyncAudioChat import Backend
 
 class MT(Thread):
     def __init__(self, text):
@@ -99,38 +99,29 @@ class MT(Thread):
             print(error.data.get("Recommend"))
             UtilClient.assert_as_string(error.message)
 
-def pure_english_chat():
-    with open(os.path.join(os.path.dirname(os.path.abspath(__file__)), 'config.json')) as F:
-        args = json.load(F)
-        ollama_model_name = args['model_name']
-        ollama_base_url = args['llm_url']
-        for key,value in args.items():
-            os.environ[key] = value
+class Backend(Backend):
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        self.machine_translation_thrad = MT(text=self.text)
     
-    text = {"text": None}
-    text_queue = queue.Queue()
-    audio_queue = queue.Queue()
+    def run(self):
+        self.stt_thread.start()
+        self.stt_thread.join()
+        
+        self.machine_translation_thrad.start()
+        self.machine_translation_thrad.join()
+        
+        self.llm_thread.start()
+        self.audio_thread.start()
+        self.speaker_thread.start()
 
-    stt_thread = Thread(target=stt, args=(lingji_stt_gradio_va,text), daemon=True)
-    stt_thread.start()
-    stt_thread.join()
-    
-    mt_thread = MT(text)
-    mt_thread.start()
-    mt_thread.join()
-    
-    llm_thread = LLM(text, text_queue, ollama_model_name=ollama_model_name, ollama_base_url=ollama_base_url)
-    audio_thread = TTS(text_queue, audio_queue)
-    speaker_thread = Speaker(audio_queue)
-    
-    llm_thread.start()
-    audio_thread.start()
-    speaker_thread.start()
-    llm_thread.join()
-    audio_thread.join()
-    speaker_thread.join()
+        self.llm_thread.join()
+        self.audio_thread.join()
+        self.speaker_thread.join()
 
 if __name__ == '__main__':
     # print("Input: {}".format(sys.argv[1]))
     # print("Output: {}".format(MT.main(sys.argv[1], sys.argv[2:])))
-    pure_english_chat()
+    main_thread = Backend()
+    main_thread.start()
+    main_thread.join()

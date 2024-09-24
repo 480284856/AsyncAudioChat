@@ -41,9 +41,18 @@ def get_logger():
 
 LOGGER = get_logger()
 
-def stt(stt_api, text, *args, **kwargs):
-    '''STT模块接收用户的语音输入，并保存转录好的文本。'''
-    text['text'] = stt_api(*args, **kwargs)
+class STT(threading.Thread):
+    def __init__(self, stt_api, text, *args, **kwargs):
+        super().__init__(daemon=True)
+
+        self.stt_api = stt_api
+        self.text = text
+        self.args_for_run = args
+        self.kwargs_for_run = kwargs
+
+    def run(self):
+        '''STT模块接收用户的语音输入，并保存转录好的文本。'''
+        self.text['text'] = self.stt_api(*(self.args_for_run), **(self.kwargs_for_run))
 
 class LLM(threading.Thread):
     def __init__(
@@ -195,7 +204,7 @@ class Backend(threading.Thread):
             for key,value in _args.items():
                 os.environ[key] = value
 
-        self.stt_thread = threading.Thread(target=stt, args=(lingji_stt_gradio_va,self.text), daemon=True)
+        self.stt_thread = STT(lingji_stt_gradio_va, self.text)
         self.llm_thread = LLM(self.text, self.text_queue, ollama_model_name=self._ollama_model_name, ollama_base_url=self._ollama_base_url)
         self.audio_thread = TTS(self.text_queue, self.audio_queue)
         self.speaker_thread = Speaker(self.audio_queue)
