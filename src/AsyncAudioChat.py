@@ -181,38 +181,36 @@ class Speaker(threading.Thread):
         LOGGER.info("Speaker: Speaker thread exited.")
 
 class Backend(threading.Thread):
-    def __init__(self,):
+    def __init__(self, *args, **kwargs):
         """把整个异步对话模块整合成一个线程。"""
         super().__init__(daemon=True)
         self.text = {"text": None}
         self.text_queue = queue.Queue()
         self.audio_queue = queue.Queue()
 
-    def run(self,):
         with open(os.path.join(os.path.dirname(os.path.abspath(__file__)), 'config.json')) as F:
-            args = json.load(F)
-            ollama_model_name = args['model_name']
-            ollama_base_url = args['llm_url']
-            for key,value in args.items():
+            _args = json.load(F)
+            self._ollama_model_name = _args['model_name']
+            self._ollama_base_url = _args['llm_url']
+            for key,value in _args.items():
                 os.environ[key] = value
-        
-        
 
-        stt_thread = threading.Thread(target=stt, args=(lingji_stt_gradio_va,self.text), daemon=True)
+        self.stt_thread = threading.Thread(target=stt, args=(lingji_stt_gradio_va,self.text), daemon=True)
+        self.llm_thread = LLM(self.text, self.text_queue, ollama_model_name=self._ollama_model_name, ollama_base_url=self._ollama_base_url)
+        self.audio_thread = TTS(self.text_queue, self.audio_queue)
+        self.speaker_thread = Speaker(self.audio_queue)
 
-        stt_thread.start()
-        stt_thread.join()
+    def run(self,):
+        self.stt_thread.start()
+        self.stt_thread.join()
         
-        llm_thread = LLM(self.text, self.text_queue, ollama_model_name=ollama_model_name, ollama_base_url=ollama_base_url)
-        audio_thread = TTS(self.text_queue, self.audio_queue)
-        speaker_thread = Speaker(self.audio_queue)
+        self.llm_thread.start()
+        self.audio_thread.start()
+        self.speaker_thread.start()
 
-        llm_thread.start()
-        audio_thread.start()
-        speaker_thread.start()
-        llm_thread.join()
-        audio_thread.join()
-        speaker_thread.join()
+        self.llm_thread.join()
+        self.audio_thread.join()
+        self.speaker_thread.join()
 
 if __name__ == "__main__":
     main_thread = Backend()
