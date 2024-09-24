@@ -1,14 +1,19 @@
 import os
+import sys
 import time
 import json
 import queue
 import logging
 import threading
 
+sys.path.append(
+    os.path.dirname(os.path.abspath(__file__))
+)
+
 from pygame import mixer
-from .zijie_tts import tts
+from zijie_tts import tts
 from langchain_ollama import ChatOllama 
-from .ali_stt_voice_awake import lingji_stt_gradio_va
+from ali_stt_voice_awake import lingji_stt_gradio_va
 END = None  # 使用None表示结束标识符
 
 def get_logger():
@@ -111,9 +116,7 @@ class LLM(threading.Thread):
             self.text_queue.put(response_delta)
         
         # 生成完成后，往队列中放入一个END结束标识符。
-        self.text_queue.put(END)
-        
-        
+        self.text_queue.put(END)     
 
     def __remove_first_match(self, s:str, sub_s:str):
         '''从s中删除第一次出现的sub_s'''
@@ -177,33 +180,41 @@ class Speaker(threading.Thread):
         self._run(*args, **kwargs)
         LOGGER.info("Speaker: Speaker thread exited.")
 
-def main():
-    with open(os.path.join(os.path.dirname(os.path.abspath(__file__)), 'config.json')) as F:
-        args = json.load(F)
-        ollama_model_name = args['model_name']
-        ollama_base_url = args['llm_url']
-        for key,value in args.items():
-            os.environ[key] = value
-    
-    text = {"text": None}
-    text_queue = queue.Queue()
-    audio_queue = queue.Queue()
+class Backend(threading.Thread):
+    def __init__(self,):
+        """把整个异步对话模块整合成一个线程。"""
+        super().__init__(daemon=True)
+        self.text = {"text": None}
+        self.text_queue = queue.Queue()
+        self.audio_queue = queue.Queue()
 
-    stt_thread = threading.Thread(target=stt, args=(lingji_stt_gradio_va,text), daemon=True)
+    def run(self,):
+        with open(os.path.join(os.path.dirname(os.path.abspath(__file__)), 'config.json')) as F:
+            args = json.load(F)
+            ollama_model_name = args['model_name']
+            ollama_base_url = args['llm_url']
+            for key,value in args.items():
+                os.environ[key] = value
+        
+        
 
-    stt_thread.start()
-    stt_thread.join()
-    
-    llm_thread = LLM(text, text_queue, ollama_model_name=ollama_model_name, ollama_base_url=ollama_base_url)
-    audio_thread = TTS(text_queue, audio_queue)
-    speaker_thread = Speaker(audio_queue)
+        stt_thread = threading.Thread(target=stt, args=(lingji_stt_gradio_va,self.text), daemon=True)
 
-    llm_thread.start()
-    audio_thread.start()
-    speaker_thread.start()
-    llm_thread.join()
-    audio_thread.join()
-    speaker_thread.join()
+        stt_thread.start()
+        stt_thread.join()
+        
+        llm_thread = LLM(self.text, self.text_queue, ollama_model_name=ollama_model_name, ollama_base_url=ollama_base_url)
+        audio_thread = TTS(self.text_queue, self.audio_queue)
+        speaker_thread = Speaker(self.audio_queue)
+
+        llm_thread.start()
+        audio_thread.start()
+        speaker_thread.start()
+        llm_thread.join()
+        audio_thread.join()
+        speaker_thread.join()
 
 if __name__ == "__main__":
-    main()
+    main_thread = Backend()
+    main_thread.start()
+    main_thread.join()
