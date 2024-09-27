@@ -34,10 +34,33 @@ python src/AsyncAudioChat.py
 这里给出各个模块的设计标准，以便使用不同的云服务或本地服务。
 ### STT
 ```python
-def stt(stt_api, *args, **kwargs) -> str:
-    '''STT模块接收用户的语音输入，并返回转录好的文本。'''
-    return stt_api(*args, **kwargs)
+class STT:
+    def __init__(self, stt_api, *args, **kwargs):
+        self.stt_api = stt_api
+        self.args_for_run = args
+        self.kwargs_for_run = kwargs
+
+    def run(self):
+        '''STT模块接收用户的语音输入，并保存转录好的文本。'''
+        return self.stt_api(*(self.args_for_run), **(self.kwargs_for_run))
 ```
+### InputProcessing
+```python
+class InputProcess:
+    def __init__(self, user_input, history, *args, **kwargs):
+        self.user_input = user_input
+        self.history = history
+    
+    def run(self, *args, **kwargs):
+        return self._run(*args, **kwargs)
+    
+    def _run(self, *args, **kwargs):
+        final_input = ""
+        for item in self.history:
+            final_input += "User: {}\n Assistant: {}\n".format(item[0], item[1])
+        return final_input + "User: {}".format(self.user_input)
+```
+
 ### LLM
 ```python
 class LLM:

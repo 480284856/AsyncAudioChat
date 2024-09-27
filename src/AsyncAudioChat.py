@@ -54,6 +54,25 @@ class STT(threading.Thread):
         '''STT模块接收用户的语音输入，并保存转录好的文本。'''
         self.text['text'] = self.stt_api(*(self.args_for_run), **(self.kwargs_for_run))
 
+class InputProcess(threading.Thread):
+    def __init__(self, user_input, history=None, *args, **kwargs):
+        super().__init__(daemon=True)
+        self.user_input = user_input
+        self.history = history
+    
+    # do not modify this function
+    def run(self, *args, **kwargs):
+        self.user_input['text']  = self._run(*args, **kwargs)
+    
+    def _run(self, *args, **kwargs):
+        final_input = ""
+        if self.history is not None:
+            for item in self.history:
+                final_input += "User: {}\nAssistant: {}\n".format(item[0], item[1])
+        final_input += "User: {}".format(self.user_input['text'])
+        LOGGER.info("Prompt is \n\n{}\n\n".format(final_input))
+        return final_input
+    
 class LLM(threading.Thread):
     def __init__(
             self, 
@@ -205,6 +224,7 @@ class Backend(threading.Thread):
                 os.environ[key] = value
 
         self.stt_thread = STT(lingji_stt_gradio_va, self.text)
+        self.input_preprocessing_thread = InputProcess(self.text, kwargs.get("history", None))
         self.llm_thread = LLM(self.text, self.text_queue, ollama_model_name=self._ollama_model_name, ollama_base_url=self._ollama_base_url)
         self.audio_thread = TTS(self.text_queue, self.audio_queue)
         self.speaker_thread = Speaker(self.audio_queue)
@@ -212,6 +232,9 @@ class Backend(threading.Thread):
     def run(self,):
         self.stt_thread.start()
         self.stt_thread.join()
+        
+        self.input_preprocessing_thread.start()
+        self.input_preprocessing_thread.join()
         
         self.llm_thread.start()
         self.audio_thread.start()

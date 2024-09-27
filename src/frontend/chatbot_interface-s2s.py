@@ -115,7 +115,7 @@ class Chatbot:
         if not flag_stop_chat:
             while True:
                 flag_stop_chat = True
-                self.process_backend = multiprocessing.Process(target=self._run_backend, daemon=True, args=(self.stt_for_web_display, self.response_for_web_display))
+                self.process_backend = multiprocessing.Process(target=self._run_backend, daemon=True, args=(self.stt_for_web_display, self.response_for_web_display), kwargs={"history": chatbot})
                 self.process_backend.start()
                 
                 # 后端运行
@@ -128,6 +128,7 @@ class Chatbot:
                 if self.flag_skip_out_loop.value:
                     # LOGGER.info("I have skip out of loop.")
                     self.flag_skip_out_loop.value = False
+                    yield [],flag_stop_chat
                     break
         else:
             # 如果后端进程存在，则关闭。
@@ -187,7 +188,7 @@ class Chatbot:
             clear.click(self.run_backend, 
                 [chatbot, self.flag_stop_chat], 
                 [chatbot, self.flag_stop_chat],
-            ).then(lambda: None, None, chatbot)
+            ).then(lambda: [], None, chatbot)
 
         demo.launch()
 
