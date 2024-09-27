@@ -11,7 +11,7 @@
           <mxGeometry x="20" y="1410" width="700" height="130" as="geometry" />
         </mxCell>
         <mxCell id="oR2MWclAaf6PLa6PnVYV-85" value="" style="rounded=1;whiteSpace=wrap;html=1;dashed=1;" vertex="1" parent="1">
-          <mxGeometry x="20" y="1560" width="700" height="195" as="geometry" />
+          <mxGeometry x="20" y="1545" width="700" height="130" as="geometry" />
         </mxCell>
         <mxCell id="oR2MWclAaf6PLa6PnVYV-77" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;entryX=0.5;entryY=1;entryDx=0;entryDy=0;exitX=0.5;exitY=0;exitDx=0;exitDy=0;curved=1;" edge="1" parent="1" source="oR2MWclAaf6PLa6PnVYV-72" target="oR2MWclAaf6PLa6PnVYV-76">
           <mxGeometry relative="1" as="geometry" />
@@ -60,9 +60,6 @@
         </mxCell>
         <mxCell id="oR2MWclAaf6PLa6PnVYV-91" value="Modules" style="text;html=1;align=center;verticalAlign=middle;whiteSpace=wrap;rounded=0;" vertex="1" parent="1">
           <mxGeometry x="650" y="1595" width="60" height="30" as="geometry" />
-        </mxCell>
-        <mxCell id="oR2MWclAaf6PLa6PnVYV-92" value="InputPreprocessing" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#d5e8d4;strokeColor=#82b366;" vertex="1" parent="1">
-          <mxGeometry x="100" y="1650" width="120" height="60" as="geometry" />
         </mxCell>
       </root>
     </mxGraphModel>
