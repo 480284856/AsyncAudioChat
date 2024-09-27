@@ -11,6 +11,9 @@
 
 ![alt text](arch/architecture.png)
 
+## 技术栈
+![alt text](<arch/stack of tech.png>)
+
 ## 快速开始
 首先，你需要在`src`文件夹中创建`config.json`文件并填写如下信息：
 ```json
@@ -25,7 +28,7 @@
 最后，你需要使用python 3.11 来安装依赖，并运行服务：
 ```bash
 pip install -r requirements.txt
-python src/main.py
+python src/AsyncAudioChat.py
 ```
 ## 模块设计规范
 这里给出各个模块的设计标准，以便使用不同的云服务或本地服务。
