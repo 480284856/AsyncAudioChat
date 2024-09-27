@@ -18,4 +18,4 @@
 - 当一次交互完成时，便会自动创建新的实例。
 - ![alt text](arch/Web_Arch-s2s-multi-chat.png)
 - 另外，为了提高整体性，我们会把对话封装为一个进程，而当用户再次点击按钮后，则需要停止实例的创建，取消子进程的运行。这可以通过一个flag_stop_chat变量来表示：第一次点击时，flag_stop_chat为False，创建进程，当用户再次点击按钮后，flag_stop_chat为True，取消进程。当对话被封装为一个进程后，我们需要把其暴露出来的`response_for_web_display`和`stt_for_web_display`实现为使用`multiprocessing.Queue`的实现，这样就能够把数据从子进程发送到主进程。
-  
+- ![alt text](arch/Web_Arch-s2s-multi-chat-close.png)
