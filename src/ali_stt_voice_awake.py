@@ -172,7 +172,7 @@ class AudioRecognitionThread(threading.Thread):
             time.sleep(0.01)  # 控制循环频率，减少CPU占用
         logging.log(level=logging.INFO, msg="语音帧发送线程已结束...")
 
-def lingji_stt_gradio_va() -> str:
+def lingji_stt_gradio_va(*args, **kwargs) -> str:
     '''
     拥有语音唤醒功能的实时文本转语音函数
     '''

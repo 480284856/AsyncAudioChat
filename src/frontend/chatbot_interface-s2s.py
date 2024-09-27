@@ -4,7 +4,9 @@ import json
 import time
 import queue
 import random
+import asyncio
 import threading
+import multiprocessing
 import gradio as gr
 
 from typing import Generator
@@ -16,7 +18,7 @@ from AsyncAudioChat import Backend,LLM,STT,LOGGER,END,lingji_stt_gradio_va
 class STT(STT):
     def __init__(self, stt_api, text, *args, **kwargs):
         super().__init__(stt_api, text, *args, **kwargs)
-        self.stt_for_web_display = queue.Queue()
+        self.stt_for_web_display:multiprocessing.Queue = kwargs['stt_for_web_display']
     
     def run(self,):
         super().run()
@@ -28,7 +30,7 @@ class LLM(LLM):
 
         # 解决前端无法实时获取token的问题。
         '''在后端线程实现里expose一个`response_for_web_display`的队列，如果LLM推理出了一个新的token，就放到这个队列里，如果推理完毕，则放入一个推理结束标志符号。'''
-        self.response_for_web_display = queue.Queue()
+        self.response_for_web_display:multiprocessing.Queue = kwargs_for_run['response_for_web_display']
         
     def __run2_ollama(self, llm_iterator, *args, **kwargs):
         old_total_response = ""
@@ -78,8 +80,8 @@ class Backend(Backend):
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
         
-        self.stt_thread = STT(lingji_stt_gradio_va, self.text)
-        self.llm_thread = LLM(self.text, self.text_queue, ollama_model_name=self._ollama_model_name, ollama_base_url=self._ollama_base_url)
+        self.stt_thread = STT(lingji_stt_gradio_va, self.text, stt_for_web_display=kwargs['stt_for_web_display'])
+        self.llm_thread = LLM(self.text, self.text_queue, ollama_model_name=self._ollama_model_name, ollama_base_url=self._ollama_base_url, response_for_web_display=kwargs['response_for_web_display'])
         
         self.stt_for_web_display = self.stt_thread.stt_for_web_display
         self.response_for_web_display = self.llm_thread.response_for_web_display
@@ -92,78 +94,106 @@ class Chatbot:
                 #component-0 { height: 100%; }
                 #chatbot { flex-grow: 1; overflow: auto;}
                 """
+        # 为了提高整体性，我们会把对话封装为一个进程，而当用户再次点击按钮后，
+        # 则需要停止对话的创建，取消子进程的运行。这可以通过一个flag_stop_chat变量来表示：
+        # 第一次点击时，flag_stop_chat为False，创建进程，当用户再次点击按钮后，flag_stop_chat为True，取消进程。
+        self.stt_for_web_display = multiprocessing.Queue()
+        self.response_for_web_display = multiprocessing.Queue()
+        # 要在gr的范围内定义，否则会爆粗key error
+        self.flag_stop_chat = None
 
-    def run(self,):
+    def _run_backend(self, stt_for_web_display:multiprocessing.Queue, response_for_web_display:multiprocessing.Queue, *args, **kwargs):
+        '''后端对话实现：单轮'''
+        backend_thread = Backend(stt_for_web_display=stt_for_web_display, response_for_web_display=response_for_web_display, *args, **kwargs)
+        backend_thread.start()
+        backend_thread.join()
+
+    def run_backend(self, chatbot, flag_stop_chat):
+        # 为了提高整体性，我们会把对话封装为一个进程，而当用户再次点击按钮后，
+        # 则需要停止对话的创建，取消子进程的运行。这可以通过一个flag_stop_chat变量来表示：
+        # 第一次点击时，flag_stop_chat为False，创建进程，当用户再次点击按钮后，flag_stop_chat为True，取消进程。
+        if not flag_stop_chat:
+            while True:
+                flag_stop_chat = True
+                self.process_backend = multiprocessing.Process(target=self._run_backend, daemon=True, args=(self.stt_for_web_display, self.response_for_web_display))
+                self.process_backend.start()
+                
+                # 后端运行
+                # 前端对后端进程通信，获取数据。
+                for chatbot_ in self.communicate_backend(chatbot):
+                    yield chatbot_,flag_stop_chat
+                
+                self.process_backend.join()
+
+                if self.flag_skip_out_loop.value:
+                    # LOGGER.info("I have skip out of loop.")
+                    self.flag_skip_out_loop.value = False
+                    break
+        else:
+            # 如果后端进程存在，则关闭。
+            flag_stop_chat = False
+            self.stt_for_web_display = multiprocessing.Queue()
+            self.response_for_web_display = multiprocessing.Queue()
+            if self.process_backend.is_alive():
+                self.process_backend.terminate()
+                self.flag_skip_out_loop.value = True
+                # LOGGER.info("Backend process terminated.")
+            yield [],flag_stop_chat
+
+    def communicate_backend(self, chatbot):
+        
+        user_text = None
+        while True:
+            # 如果进程已经取消了，并且这里还使用queue.get方法的话，就会一直卡在这里。
+            if not self.process_backend.is_alive():
+                return []
+
+            try:
+                user_text = self.stt_for_web_display.get_nowait()
+            except queue.Empty:
+                time.sleep(0.01)
+                # LOGGER.error("No data received from the stt.")
+            finally:
+                if user_text:
+                    break
+        
+        chatbot += [[user_text,None]]
+        yield chatbot
+            
+        chatbot[-1][1] = ""
+        while True:
+            token = self.response_for_web_display.get()
+            if token == END:
+                break
+            chatbot[-1][1] += token
+            yield chatbot
+
+    def run_web(self,):
         with gr.Blocks(css=self.css) as demo:         # css: 实现全高 分布
             chatbot = gr.Chatbot(elem_id="chatbot")   # css: 实现全高 分布
-            
+            # 要在gr的范围内定义，否则会报key error
+            self.flag_stop_chat = gr.State(False)
+            self.flag_skip_out_loop = gr.State(False)
+
             with gr.Row():
                 msg = gr.Button("AudioChat")
-                clear = gr.Button("Clear")
+                clear = gr.Button("Stop & Clear")
 
             msg.click(
                 self.run_backend, 
-                [chatbot], 
-                [chatbot]
+                [chatbot, self.flag_stop_chat], 
+                [chatbot, self.flag_stop_chat],
             )
-            clear.click(lambda: None, None, chatbot, queue=False)
+            clear.click(self.run_backend, 
+                [chatbot, self.flag_stop_chat], 
+                [chatbot, self.flag_stop_chat],
+            ).then(lambda: None, None, chatbot)
 
         demo.launch()
 
-    def backend(self, *args, **kwargs) -> Generator[str, None, None]:
-        '''后端对话实现：单轮'''
-        backend_thread = Backend(*args, **kwargs)
-        backend_thread.start()
-
-        # 先返回STT结果
-        user_input = backend_thread.stt_for_web_display.get()
-        yield user_input
-        # 再返回LLM推理结果
-        llm_response_queue = backend_thread.response_for_web_display
-        while True:
-            token = llm_response_queue.get()
-            if token == END:
-                break
-            yield token
-        
-        backend_thread.join()
-        
-    def run_backend(self, chatbot):
-        while True:
-            llm_backend = self.backend()
-            
-            user_text = next(llm_backend)
-            chatbot += [[user_text,None]]
-            yield chatbot
-            
-            chatbot[-1][1] = ""
-            for token in llm_backend:
-                chatbot[-1][1] += token
-                yield chatbot
-
-    def test(self,):
-        with gr.Blocks(css=self.css) as demo:         # css: 实现全高 分布
-            chatbot = gr.Chatbot(elem_id="chatbot")   # css: 实现全高 分布
-            
-            with gr.Row():
-                msg = gr.Button("AudioChat")
-                clear = gr.Button("Clear")
-
-            def test(chatbot):
-                # while True:
-                time.sleep(1)
-                chatbot += [["hello world","hello world"]]
-                yield chatbot
-            
-            msg.click(
-                test, 
-                [chatbot], 
-                [chatbot],
-                queue=True,
-            )
-            clear.click(lambda: None, None, chatbot, queue=False)
-
-        demo.launch()
 if __name__ == "__main__":
-    main_thread = Chatbot()
-    main_thread.run()
+    process = multiprocessing.Process(target=Chatbot().run_web)
+
+    process.start()
+    process.join()
+

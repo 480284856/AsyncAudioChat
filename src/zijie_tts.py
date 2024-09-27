@@ -50,7 +50,7 @@ def tts(
 
     cluster = "volcano_tts"
 
-    voice_type = "BV005_streaming"
+    voice_type = "BV503_streaming"
     host = "openspeech.bytedance.com"
     api_url = f"https://{host}/api/v1/tts"
 
@@ -144,8 +144,11 @@ class AudioConsumer(threading.Thread):
         mixer.quit()
 
 if __name__ == '__main__':
+    os.environ["zijie_tts_app_id"] = "3065693124"
+    os.environ["zijie_tts_access_token"] = "OBINUyUlD0ZnrMA10zh6ykOvISm2SRN-"
     if not os.environ.get("zijie_tts_app_id"):
         logger = get_logger("tts_key_checker")
         logger.error("Please set your APP ID and access token in the environment variables zijie_tts_app_id and tts_key_checker")
         exit(1)
-    tts("中国，全称中华人民共和国，位于亚洲东部，太平洋西岸，是世界上人口最多的国家之一，拥有超过五千年的悠久历史和灿烂文化。中国疆域辽阔，陆地面积约为960万平方千米，地域多样，从东部的平原、丘陵到西部的高原、山脉，自然景观丰富。")
+    # print(tts("中国，全称中华人民共和国，位于亚洲东部，太平洋西岸，是世界上人口最多的国家之一，拥有超过五千年的悠久历史和灿烂文化。中国疆域辽阔，陆地面积约为960万平方千米，地域多样，从东部的平原、丘陵到西部的高原、山脉，自然景观丰富。"))
+    print(tts("hello, how can i help you."))
