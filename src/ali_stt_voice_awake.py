@@ -14,7 +14,6 @@ from dashscope.api_entities.dashscope_response import RecognitionResponse
 from dashscope.audio.asr import (Recognition, RecognitionCallback, RecognitionResult)
 
 
-recognizer = sr.Recognizer()
 stream = None                              # 音频流对象，用于读取音频数据。
 mic = None                                 # 麦克风对象
 transform_res = {'sentence':None}                       # 转写结果记录,记录每一次转写结果.
@@ -190,7 +189,7 @@ def lingji_stt_gradio_va(*args, **kwargs) -> str:
         callback=CallbackVoiceAwake(),
         # **kwargs
         )
-    
+
     recognition.start()
 
     # 使用麦克风进行录音
@@ -206,6 +205,7 @@ def lingji_stt_gradio_va(*args, **kwargs) -> str:
         time.sleep(0.01)
     stt_thread.join()                     # 此时stt线程应该是要结束运行的.
     recognition.stop()                    # 停止语音识别
+    del recognition
     recognition = None
 
     result = transform_res['sentence']

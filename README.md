@@ -57,7 +57,7 @@ class InputProcess:
     def _run(self, *args, **kwargs):
         final_input = ""
         for item in self.history:
-            final_input += "User: {}\n Assistant: {}\n".format(item[0], item[1])
+            final_input += "User: {}\nAssistant: {}\n".format(item[0], item[1])
         return final_input + "User: {}".format(self.user_input)
 ```
 
@@ -97,7 +97,7 @@ class TTS:
         raise
     
     def run(self, *args, **kwargs):
-        raise
+        raise 
     
 ```
 ### Speaker
@@ -113,4 +113,21 @@ class Speaker:
     
     def run(self, *args, **kwargs):
         raise
+```
+### 语音唤醒
+这里主要介绍本组件的语音唤醒的工作原理。
+我们会使用“Main Work FLow”、“Monitor”和“Dida”三个模块来描述本组件的工作原理。
+- Main Work FLow：固定回复语音对话的核心程序。
+- Monitor: 用于监测是否有语音输入。
+- Dida：用于计数。
+
+这里的语音唤醒模块更像是一个闸门，其会用到STT模块，实时监测环境：
+1. 如果STT模块给出的结果里含有唤醒词，那么就激活后面的工作流；
+   a. 如果激活后用户没有在限定的时间内说话，则取消掉两个用于监控的线程以及主 工作流，进入休眠模式。
+   b. 如果激活后用户在限定的时间内说话，则取消两个用于监控的线程，让主工作流运行。
+2. 如果没有，则不激活；
+![alt text](arch/architecture-voice-awake.png)
+
+```python
+
 ```

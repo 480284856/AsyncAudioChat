@@ -50,7 +50,7 @@ def tts(
 
     cluster = "volcano_tts"
 
-    voice_type = "BV503_streaming"
+    voice_type = "BV005_streaming"
     host = "openspeech.bytedance.com"
     api_url = f"https://{host}/api/v1/tts"
 

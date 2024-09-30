@@ -5,6 +5,7 @@ import json
 import queue
 import logging
 import threading
+import multiprocessing
 
 sys.path.append(
     os.path.dirname(os.path.abspath(__file__))
@@ -15,6 +16,7 @@ from zijie_tts import tts
 from langchain_ollama import ChatOllama 
 from ali_stt_voice_awake import lingji_stt_gradio_va
 END = None  # 使用None表示结束标识符
+OUTPUT_LOG_DEBUG = True # 是否输出日志
 
 def get_logger():
     # 日志收集器
@@ -54,6 +56,9 @@ class STT(threading.Thread):
         '''STT模块接收用户的语音输入，并保存转录好的文本。'''
         self.text['text'] = self.stt_api(*(self.args_for_run), **(self.kwargs_for_run))
 
+        # import random
+        # self.text['text'] = random.choice(["你好", "你是谁?"])
+
 class InputProcess(threading.Thread):
     def __init__(self, user_input, history=None, *args, **kwargs):
         super().__init__(daemon=True)
@@ -70,7 +75,7 @@ class InputProcess(threading.Thread):
             for item in self.history:
                 final_input += "User: {}\nAssistant: {}\n".format(item[0], item[1])
         final_input += "User: {}".format(self.user_input['text'])
-        LOGGER.info("Prompt is \n\n{}\n\n".format(final_input))
+        LOGGER.debug("Prompt is \n\n{}\n\n".format(final_input))
         return final_input
     
 class LLM(threading.Thread):
@@ -107,7 +112,7 @@ class LLM(threading.Thread):
     def _run2(self, llm_iterator, *args, **kwargs) -> None:
         '''对LLM的输出做实时处理：若输出了完整的一句话，则把这个句子放入到一个Text queue队列中。如果LLM推理结束，则往Text queue队列中放入一个结束标志符号END。'''
         self.__run2_ollama(llm_iterator, *args, **kwargs)
-    
+
     def __run2_ollama(self, llm_iterator, *args, **kwargs):
         old_total_response = ""
         current_total_response = ""
@@ -130,7 +135,7 @@ class LLM(threading.Thread):
                     text = response_delta[:punctuation_index + 1]    # 截取这段文本
                     old_total_response += text                  # 拼接到old_total_response对象右侧
                     self.text_queue.put(text)               # 把这段文本放入到text队列中
-                    LOGGER.info("LLM: new sentence: {}".format(old_total_response))
+                    LOGGER.debug("LLM: new sentence: {}".format(old_total_response))
                     
                     # 如果response_delta中存在不止一个符号，那么我们在做完第一个符号对应的工作后，把response_delta更新为去掉第一段文本的剩下文本，然后进行同样的操作。
                     response_delta = response_delta[punctuation_index + 1:]
@@ -206,13 +211,186 @@ class Speaker(threading.Thread):
     
     def run(self, *args, **kwargs):
         self._run(*args, **kwargs)
-        LOGGER.info("Speaker: Speaker thread exited.")
+        LOGGER.debug("Speaker: Speaker thread exited.")
 
+class VoiceAwakeBackend(threading.Thread):
+    global LOCK
+    LOCK = threading.Lock()
+    
+    class Monitor(threading.Thread):
+        global LOCK
+        def __init__(self, text:dict, flag_kill_dida:dict, flag_kill_monitor:dict) -> None:
+            super().__init__(daemon=True)
+            self.text = text
+            self.flag_kill_dida = flag_kill_dida
+            self.flag_kill_monitor = flag_kill_monitor
+        
+        def run(self):
+            while True:
+                # If there is any text, kill dida and itself.
+                if self.text['text']:
+                    # set the value as True, and then the dida thread will suicide.
+                    with LOCK:
+                        self.flag_kill_dida['value'] = True
+                    LOGGER.debug(f"monitor is exit.") if OUTPUT_LOG_DEBUG else None
+                    break
+                elif self.flag_kill_monitor['value']:
+                    LOGGER.debug(f"monitor is exit.") if OUTPUT_LOG_DEBUG else None
+                    break
+                else:
+                    time.sleep(0.01)
+    
+    class Dida(threading.Thread):
+        global LOCK
+        def __init__(self,flag_kill_dida:dict, flag_kill_monitor:dict, flag_kill_mfw:dict,  main_work_flow:multiprocessing.Process, dida_time:float=30):
+            super().__init__(daemon=True)
+            self.flag_kill_dida = flag_kill_dida
+            self.dida_time = dida_time
+            self.flag_kill_monitor = flag_kill_monitor
+            self.mwf = main_work_flow
+            self.flag_kill_mfw = flag_kill_mfw
+            
+            def _kill_dida(flag_dida, flag_monitor, flag_kill_mfw):
+                with LOCK:
+                    # 如果就在刚刚，monitor检测到输入了，而此时dida也刚好触发了这个函数（还没来得及kill掉self.dida），那么就要停止这个函数的运行，否则会kill掉main work flow
+                    if flag_dida['value']:
+                        return
+                    else:
+                        LOGGER.debug(f"I will kill main work flow soon") if OUTPUT_LOG_DEBUG else None
+                        LOGGER.debug(f"I will kill monitor soon") if OUTPUT_LOG_DEBUG else None
+                        LOGGER.debug(f"I will kill dida soon") if OUTPUT_LOG_DEBUG else None
+                        flag_dida['value'] = True
+                        flag_monitor['value'] = True
+                        flag_kill_mfw['value'] = True
+                        
+            self.dida = threading.Timer(self.dida_time, _kill_dida, args=[self.flag_kill_dida, self.flag_kill_monitor, self.flag_kill_mfw])
+            self.dida.start()
+        
+        def run(self,):
+            while True:
+                # If monitor thread set the flag to True, then kill dida.
+                if self.flag_kill_dida['value'] and not self.flag_kill_mfw['value']:
+                    LOGGER.debug(f"Dida is killed but main work flow is still running.") if OUTPUT_LOG_DEBUG else None
+                    self.dida.cancel()
+                    break
+                # or if itself did so(be silent more than dida_time), 
+                elif self.flag_kill_dida['value'] and self.flag_kill_mfw['value']:
+                    LOGGER.debug(f"Dida and main work flow are killed.") if OUTPUT_LOG_DEBUG else None
+                    if self.mwf.is_alive():
+                        self.mwf.terminate()
+                    break
+                else:
+                    time.sleep(0.01)
+
+    def __init__(self, awake_words:str, time_to_sleep:float=30, *args, **kwargs):
+        """
+        语音唤醒
+        """
+        super().__init__(daemon=True)
+        with open(os.path.join(os.path.dirname(os.path.abspath(__file__)), 'config.json')) as F:
+            _args = json.load(F)
+            self._ollama_model_name = _args['model_name']
+            self._ollama_base_url = _args['llm_url']
+            for key,value in _args.items():
+                os.environ[key] = value
+        
+        self.manager = multiprocessing.Manager()
+        # for key words
+        self.key_word = awake_words
+        self.key_word_text = self.manager.dict({"text":""})
+        # for monitor: create an area of shared memory for {"text": None}
+        self.text_main_work_flow = self.manager.dict({"text":None})
+        
+        self.time_to_sleep = time_to_sleep
+
+        self.flag_kill_dida = {"value": False}
+        self.flag_kill_monitor = {"value": False}
+        self.flag_kill_mfw = {"value":False}
+        
+        self.welcome_audio_path = None
+
+    def run(self):
+        while True:
+            self.key_word_stt = multiprocessing.Process(target=self.__kw_detector, kwargs={"text":self.key_word_text})
+            self.key_word_stt.start()
+            self.key_word_stt.join()
+            if self.is_kw_detected():
+                self.key_word_text["text"] = ""
+                
+                while True:
+                    # 如果STT模块给出的结果里含有唤醒词，那么就激活后面的Main Work Flow，同时激活Monitor和Dida。
+                    # If the result of STT module contains the wake up word, then activate the main work flow, monitor and dida.
+                    self.main_work_flow = multiprocessing.Process(target=self.create_main_work_flow, kwargs={"text":self.text_main_work_flow})
+                    self.main_work_flow.start()
+
+                    time.sleep(1)
+                    self.monitor = self.Monitor(self.text_main_work_flow, self.flag_kill_dida, self.flag_kill_monitor)
+                    self.dida = self.Dida(self.flag_kill_dida, self.flag_kill_monitor, self.flag_kill_mfw, self.main_work_flow, self.time_to_sleep)
+                    self.monitor.start()
+                    self.dida.start()
+
+                    self.monitor.join()
+                    self.dida.join()
+                    self.main_work_flow.join()
+                    
+                    # go to sleep
+                    if self.flag_kill_dida['value'] and self.flag_kill_mfw['value'] and self.flag_kill_mfw['value']:
+                        self.flag_kill_dida["value"] = False
+                        self.flag_kill_monitor["value"] = False
+                        self.flag_kill_mfw["value"] = False
+                        self.text_main_work_flow["text"] = None
+                        LOGGER.info(f"Be silent over {self.time_to_sleep}s, turn to sleep mode.")
+                        break
+                    else:
+                        self.flag_kill_dida["value"] = False
+                        self.flag_kill_monitor["value"] = False
+                        self.flag_kill_mfw["value"] = False
+                        self.text_main_work_flow["text"] = None
+            else:
+                time.sleep(0.01)
+    
+    def create_main_work_flow(self, text):
+        self.backend = Backend(text=text)
+        self.backend.start()
+        self.backend.join()
+
+
+    def is_kw_detected(self,):
+        try:
+            transcript = self.key_word_text['text']
+            if "你好" in transcript:
+                self.__play_welcome_audio()
+                LOGGER.info("Wake word detected!")
+                return True
+        except Exception as e:
+            print(f"Error occurred: {e}")
+
+    def __play_welcome_audio(self):
+        if self.welcome_audio_path is None:
+            self.welcome_audio_path = tts("诶！")
+        self.__play_audio(self.welcome_audio_path)
+
+    def __play_audio(self, audio_path):
+        mixer.init()
+        mixer.music.load(audio_path)
+        mixer.music.play()
+        while mixer.music.get_busy():
+            time.sleep(0.001)
+        
+        mixer.music.unload()
+        mixer.quit()  
+
+
+    def __kw_detector(self, text):
+        stt = STT(lingji_stt_gradio_va, text)
+        stt.start()
+        stt.join()
+        
 class Backend(threading.Thread):
     def __init__(self, *args, **kwargs):
         """把整个异步对话模块整合成一个线程。"""
         super().__init__(daemon=True)
-        self.text = {"text": None}
+        self.text = kwargs.get("text", {"text": None})
         self.text_queue = queue.Queue()
         self.audio_queue = queue.Queue()
 
@@ -245,6 +423,6 @@ class Backend(threading.Thread):
         self.speaker_thread.join()
 
 if __name__ == "__main__":
-    main_thread = Backend()
+    main_thread = VoiceAwakeBackend("你好", time_to_sleep=5)
     main_thread.start()
     main_thread.join()
