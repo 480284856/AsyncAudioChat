@@ -33,6 +33,7 @@ from ali_stt_voice_awake import lingji_stt_gradio_va
 
 END = None  # 使用None表示结束标识符
 OUTPUT_LOG_DEBUG = True # 是否输出日志
+PREPARED_TEXT = "你好，此次输入不合规，顾不做回答（此次对话不会记录到聊天记录中）。" # 内容审核模块，如果输入不合规，则输出默认回复
 
 def get_logger():
     # 日志收集器
@@ -234,7 +235,7 @@ class Speaker(threading.Thread):
 
 class ContextMonitor(threading.Thread):
     def __init__(self, text, flag_is_valid, text_queue:queue.Queue, prepared_text, *args, **kwargs):
-        super().__init__(daemon=True, *args, **kwargs)
+        super().__init__(daemon=True)
         self.text = text
         self.flag_is_valid = flag_is_valid
 
@@ -401,6 +402,66 @@ class Backend(threading.Thread):
         except:
             pass
 
+class ContextMonitorBackend(Backend):
+    def __init__(self, prepared_text:str=PREPARED_TEXT, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        
+        self.flag_is_valid = {"value": False}
+        self.context_monitor = ContextMonitor(self.text, self.flag_is_valid, self.text_queue, prepared_text)
+
+    def run(self,):
+        try:
+            self.stt_thread.start()
+            self.stt_thread.join()
+            
+            self.context_monitor.start()
+            self.context_monitor.join()
+            
+            if self.flag_is_valid['value']:
+                self.input_preprocessing_thread.start()
+                self.input_preprocessing_thread.join()
+
+                self.llm_thread.start()
+                self.audio_thread.start()
+                self.speaker_thread.start()
+
+                self.llm_thread.join()
+                self.audio_thread.join()
+                self.speaker_thread.join()
+            else:
+                LOGGER.warning("Invalid context, skipping llm")
+                self.audio_thread.start()
+                self.speaker_thread.start()
+
+                self.audio_thread.join()
+                self.speaker_thread.join()
+        except:
+            pass
+
+class PureEnglishChatBackend(Backend):
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        self.machine_translation_thrad = MT(text=self.text)
+        self.audio_thread = TTS(self.text_queue, self.audio_queue, voice_type=kwargs.get("voice_type", "BV503_streaming"))
+        self.input_type = kwargs.get("input_type", "en")
+    
+    def run(self):
+        self.stt_thread.start()
+        self.stt_thread.join()
+        
+        if self.input_type == "zh":
+            self.machine_translation_thrad.start()
+            self.machine_translation_thrad.join()
+        
+        self.llm_thread.start()
+        self.audio_thread.start()
+        self.speaker_thread.start()
+
+        self.llm_thread.join()
+        self.audio_thread.join()
+        self.speaker_thread.join()
+
+
 class VoiceAwakeBackend(multiprocessing.Process):
     global LOCK
     LOCK = threading.Lock()
@@ -458,7 +519,7 @@ class VoiceAwakeBackend(multiprocessing.Process):
             while True:
                 # If monitor thread set the flag to True, then kill dida.
                 if self.flag_kill_dida['value'] and not self.flag_kill_mfw['value']:
-                    LOGGER.debug(f"Dida is killed but main work flow is still running.") if OUTPUT_LOG_DEBUG else None
+                    LOGGER.debug(f"Dida is killed but main workflow is still running.") if OUTPUT_LOG_DEBUG else None
                     self.dida.cancel()
                     break
                 # or if itself did so(be silent more than dida_time), 
@@ -537,7 +598,7 @@ class VoiceAwakeBackend(multiprocessing.Process):
                 time.sleep(0.01)
     
     def create_main_work_flow(self, text):
-        self.backend = Backend(text=text)
+        self.backend = ContextMonitorBackend(text=text)
         self.backend.start()
         self.backend.join()
 
@@ -575,67 +636,11 @@ class VoiceAwakeBackend(multiprocessing.Process):
         stt.start()
         stt.join()
 
-class ContextMonitorBackend(Backend):
-    def __init__(self, prepared_text:str="你好，此次输入不合规，顾不做回答（此次对话不会记录到聊天记录中）。", *args, **kwargs):
-        super().__init__(*args, **kwargs)
-        
-        self.flag_is_valid = {"value": False}
-        self.context_monitor = ContextMonitor(self.text, self.flag_is_valid, self.text_queue, prepared_text)
-
-    def run(self,):
-        try:
-            self.stt_thread.start()
-            self.stt_thread.join()
-            
-            self.context_monitor.start()
-            self.context_monitor.join()
-            
-            if self.flag_is_valid['value']:
-                self.input_preprocessing_thread.start()
-                self.input_preprocessing_thread.join()
-
-                self.llm_thread.start()
-                self.audio_thread.start()
-                self.speaker_thread.start()
-
-                self.llm_thread.join()
-                self.audio_thread.join()
-                self.speaker_thread.join()
-            else:
-                LOGGER.warning("Invalid context, skipping llm")
-                self.audio_thread.start()
-                self.speaker_thread.start()
-
-                self.audio_thread.join()
-                self.speaker_thread.join()
-        except:
-            pass
-
-class PureEnglishChatBackend(Backend):
-    def __init__(self, *args, **kwargs):
-        super().__init__(*args, **kwargs)
-        self.machine_translation_thrad = MT(text=self.text)
-        self.audio_thread = TTS(self.text_queue, self.audio_queue, voice_type=kwargs.get("voice_type", None))
-    
-    def run(self):
-        self.stt_thread.start()
-        self.stt_thread.join()
-        
-        # self.machine_translation_thrad.start()
-        # self.machine_translation_thrad.join()
-        
-        self.llm_thread.start()
-        self.audio_thread.start()
-        self.speaker_thread.start()
-
-        self.llm_thread.join()
-        self.audio_thread.join()
-        self.speaker_thread.join()
-
 
 if __name__ == "__main__":
     # main_thread = VoiceAwakeBackend("你好", time_to_sleep=5)
     # main_thread = Backend()
-    main_thread = PureEnglishChatBackend(voice_type="BV503_streaming")
+    # main_thread = PureEnglishChatBackend(input_type="zh")
+    main_thread = PureEnglishChatBackend()
     main_thread.start()
     main_thread.join()

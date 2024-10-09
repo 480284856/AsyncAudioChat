@@ -13,7 +13,7 @@ from typing import Generator
 sys.path.append(
     os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 )
-from AsyncAudioChat import Backend,LLM,STT,LOGGER,END,lingji_stt_gradio_va
+from AsyncAudioChat import Backend,LLM,STT,LOGGER,END,lingji_stt_gradio_va,ContextMonitorBackend,ContextMonitor,PREPARED_TEXT
 
 class STT(STT):
     def __init__(self, stt_api, text, *args, **kwargs):
@@ -86,6 +86,33 @@ class Backend(Backend):
         self.stt_for_web_display = self.stt_thread.stt_for_web_display
         self.response_for_web_display = self.llm_thread.response_for_web_display
 
+class ContextMonitor(ContextMonitor):
+    def __init__(self, text, flag_is_valid, text_queue: queue.Queue, prepared_text, *args, **kwargs):
+        super().__init__(text, flag_is_valid, text_queue, prepared_text, *args, **kwargs)
+
+        self.response_for_web_display=kwargs['response_for_web_display']
+    
+    def run(self) -> bool:
+        self.flag_is_valid['value'] = self._run(self.text['text'], *self.args_for_run, **self.kwargs_for_run)
+        
+        if self.flag_is_valid['value']:
+            LOGGER.debug("ContextMonitor: Context check passed.")
+        else:
+            LOGGER.debug("ContextMonitor: Context check failed.")
+            self.text_queue.put(self.prepared_text)
+            self.response_for_web_display.put(self.prepared_text)
+            self.response_for_web_display.put(END)
+            self.text_queue.put(END)
+            
+class Backend(Backend, ContextMonitorBackend):
+    def __init__(self, prepared_text: str = PREPARED_TEXT, *args, **kwargs):
+        super().__init__(prepared_text, *args, **kwargs)
+
+        user_input_dict = self.text
+        user_input_is_valid = self.flag_is_valid
+        queque_for_prepared_text = self.text_queue
+        self.context_monitor = ContextMonitor(user_input_dict, user_input_is_valid, text_queue=queque_for_prepared_text, prepared_text=prepared_text, *args, **kwargs)
+
 class Chatbot:    
     def __init__(self) -> None:
         self.css ="""
@@ -123,6 +150,10 @@ class Chatbot:
                 for chatbot_ in self.communicate_backend(chatbot):
                     yield chatbot_,flag_stop_chat
                 
+                if chatbot_[-1][-1] == PREPARED_TEXT: # 本次对话不合规，删除本次对话
+                    del chatbot_[-1]
+                    yield chatbot_,flag_stop_chat
+
                 self.process_backend.join()
 
                 if self.flag_skip_out_loop.value:
@@ -197,4 +228,3 @@ if __name__ == "__main__":
 
     process.start()
     process.join()
-

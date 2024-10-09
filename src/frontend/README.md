@@ -13,6 +13,8 @@
 - 实时获取LLM推理的token：在后端线程实现里expose一个`response_for_web_display`的队列，如果LLM推理出了一个新的token，就放到这个队列里，如果推理完毕，则放入一个推理结束标志符号。然后在主线程里，设计一个函数，借助上述队列，实现实时返回token。
 - 用户语音转文本结果：在后端线程实现里expose一个`stt_for_web_display`的队列，如果STT模块完成了语音转文本，那么就把转录结果放到这个队列里面。
 ![alt text](arch/Web_Arch-s2s-web-display.png)
+#### 具有内容管控功能的后端
+由于具有内容管控功能的后端在输入不合规时，会跳过LLM的推理，这会导致`response_for_web_display`为空，所以我们需要extend这个后端的功能：如果`kwargs`里有`response_for_web_display`，则也把固定回复放到这个队列里。
 ### 多轮对话实现
 当前`Backend`是一个单轮对话API，要实现多轮对话，就需要在死循环里创建`Backend`实例：
 - 当一次交互完成时，便会自动创建新的实例。
