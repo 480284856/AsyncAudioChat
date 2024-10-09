@@ -7,6 +7,11 @@ import logging
 import threading
 import multiprocessing
 
+from aliyunsdkcore.client import AcsClient
+from aliyunsdkcore.acs_exception.exceptions import ClientException
+from aliyunsdkcore.acs_exception.exceptions import ServerException
+from aliyunsdknlp_automl.request.v20191111 import RunPreTrainServiceRequest
+
 sys.path.append(
     os.path.dirname(os.path.abspath(__file__))
 )
@@ -15,6 +20,7 @@ from pygame import mixer
 from zijie_tts import tts
 from langchain_ollama import ChatOllama 
 from ali_stt_voice_awake import lingji_stt_gradio_va
+
 END = None  # 使用None表示结束标识符
 OUTPUT_LOG_DEBUG = True # 是否输出日志
 
@@ -77,7 +83,7 @@ class InputProcess(threading.Thread):
         final_input += "User: {}".format(self.user_input['text'])
         LOGGER.debug("Prompt is \n\n{}\n\n".format(final_input))
         return final_input
-    
+
 class LLM(threading.Thread):
     def __init__(
             self, 
@@ -213,7 +219,56 @@ class Speaker(threading.Thread):
         self._run(*args, **kwargs)
         LOGGER.debug("Speaker: Speaker thread exited.")
 
-class VoiceAwakeBackend(threading.Thread):
+class ContextMonitor(threading.Thread):
+    def __init__(self, text, flag_is_valid, text_queue:queue.Queue, prepared_text, *args, **kwargs):
+        super().__init__(daemon=True, *args, **kwargs)
+        self.text = text
+        self.flag_is_valid = flag_is_valid
+
+        self.args_for_run = args
+        self.kwargs_for_run = kwargs
+        self.text_queue = text_queue
+        self.prepared_text = prepared_text
+    
+    def run(self) -> bool:
+        self.flag_is_valid['value'] = self._run(self.text['text'], *self.args_for_run, **self.kwargs_for_run)
+        
+        if self.flag_is_valid['value']:
+            LOGGER.debug("ContextMonitor: Context check passed.")
+        else:
+            LOGGER.debug("ContextMonitor: Context check failed.")
+            self.text_queue.put(self.prepared_text)
+            self.text_queue.put(END)
+
+    def _run(self, text, *args, **kwargs):
+        return self.__run_alibaba_cloud(text, *args, **kwargs)
+    def __run_alibaba_cloud(self, text:str, *args, **kwargs):
+        assert type(text)==str
+        
+        access_key_id = os.environ.get("context_checking_access_key_id")
+        access_key_secret = os.environ.get("context_checking_access_key_secret")
+
+        # Initialize AcsClient instance
+        client = AcsClient(
+        access_key_id,
+        access_key_secret,
+        "cn-hangzhou"
+        )
+        content = {"session_id": 0, "text": text}
+        # Initialize a request and set parameters
+        request = RunPreTrainServiceRequest.RunPreTrainServiceRequest()
+        request.set_ServiceName('NLP-Dialog-Risk')
+        request.set_PredictContent(json.dumps(content))
+        # Print response
+        response = client.do_action_with_exception(request)
+        resp_obj = json.loads(response)
+        predict_result = json.loads(resp_obj['PredictResult'])
+        if predict_result['label'] == "abuse":
+            return False
+        else:
+            return True
+
+class VoiceAwakeBackend(multiprocessing.Process):
     global LOCK
     LOCK = threading.Lock()
     
@@ -286,7 +341,7 @@ class VoiceAwakeBackend(threading.Thread):
         """
         语音唤醒
         """
-        super().__init__(daemon=True)
+        super().__init__()
         with open(os.path.join(os.path.dirname(os.path.abspath(__file__)), 'config.json')) as F:
             _args = json.load(F)
             self._ollama_model_name = _args['model_name']
@@ -323,7 +378,6 @@ class VoiceAwakeBackend(threading.Thread):
                     self.main_work_flow = multiprocessing.Process(target=self.create_main_work_flow, kwargs={"text":self.text_main_work_flow})
                     self.main_work_flow.start()
 
-                    time.sleep(1)
                     self.monitor = self.Monitor(self.text_main_work_flow, self.flag_kill_dida, self.flag_kill_monitor)
                     self.dida = self.Dida(self.flag_kill_dida, self.flag_kill_monitor, self.flag_kill_mfw, self.main_work_flow, self.time_to_sleep)
                     self.monitor.start()
@@ -332,7 +386,7 @@ class VoiceAwakeBackend(threading.Thread):
                     self.monitor.join()
                     self.dida.join()
                     self.main_work_flow.join()
-                    
+
                     # go to sleep
                     if self.flag_kill_dida['value'] and self.flag_kill_mfw['value'] and self.flag_kill_mfw['value']:
                         self.flag_kill_dida["value"] = False
@@ -354,7 +408,6 @@ class VoiceAwakeBackend(threading.Thread):
         self.backend.start()
         self.backend.join()
 
-
     def is_kw_detected(self,):
         try:
             transcript = self.key_word_text['text']
@@ -368,7 +421,11 @@ class VoiceAwakeBackend(threading.Thread):
     def __play_welcome_audio(self):
         if self.welcome_audio_path is None:
             self.welcome_audio_path = tts("诶！")
-        self.__play_audio(self.welcome_audio_path)
+        # 使用音频需要在一个新的进程里播放，否则其他进程将无法使用音频设备。
+        play_audio = multiprocessing.Process(target=self.__play_audio, args=(self.welcome_audio_path,))
+        play_audio.daemon=True
+        play_audio.start()
+        play_audio.join()
 
     def __play_audio(self, audio_path):
         mixer.init()
@@ -380,12 +437,11 @@ class VoiceAwakeBackend(threading.Thread):
         mixer.music.unload()
         mixer.quit()  
 
-
     def __kw_detector(self, text):
         stt = STT(lingji_stt_gradio_va, text)
         stt.start()
         stt.join()
-        
+
 class Backend(threading.Thread):
     def __init__(self, *args, **kwargs):
         """把整个异步对话模块整合成一个线程。"""
@@ -400,7 +456,7 @@ class Backend(threading.Thread):
             self._ollama_base_url = _args['llm_url']
             for key,value in _args.items():
                 os.environ[key] = value
-
+                
         self.stt_thread = STT(lingji_stt_gradio_va, self.text)
         self.input_preprocessing_thread = InputProcess(self.text, kwargs.get("history", None))
         self.llm_thread = LLM(self.text, self.text_queue, ollama_model_name=self._ollama_model_name, ollama_base_url=self._ollama_base_url)
@@ -408,21 +464,61 @@ class Backend(threading.Thread):
         self.speaker_thread = Speaker(self.audio_queue)
 
     def run(self,):
-        self.stt_thread.start()
-        self.stt_thread.join()
-        
-        self.input_preprocessing_thread.start()
-        self.input_preprocessing_thread.join()
-        
-        self.llm_thread.start()
-        self.audio_thread.start()
-        self.speaker_thread.start()
+        try:
+            self.stt_thread.start()
+            self.stt_thread.join()
+            
+            self.input_preprocessing_thread.start()
+            self.input_preprocessing_thread.join()
+            
+            self.llm_thread.start()
+            self.audio_thread.start()
+            self.speaker_thread.start()
 
-        self.llm_thread.join()
-        self.audio_thread.join()
-        self.speaker_thread.join()
+            self.llm_thread.join()
+            self.audio_thread.join()
+            self.speaker_thread.join()
+        except:
+            pass
+
+class Backend(Backend):
+    def __init__(self, prepared_text:str="你好，此次输入不合规，顾不做回答（此次对话不会记录到聊天记录中）。", *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        
+        self.flag_is_valid = {"value": False}
+        self.context_monitor = ContextMonitor(self.text, self.flag_is_valid, self.text_queue, prepared_text)
+
+    def run(self,):
+        try:
+            self.stt_thread.start()
+            self.stt_thread.join()
+            
+            self.context_monitor.start()
+            self.context_monitor.join()
+            
+            if self.flag_is_valid['value']:
+                self.input_preprocessing_thread.start()
+                self.input_preprocessing_thread.join()
+
+                self.llm_thread.start()
+                self.audio_thread.start()
+                self.speaker_thread.start()
+
+                self.llm_thread.join()
+                self.audio_thread.join()
+                self.speaker_thread.join()
+            else:
+                LOGGER.warning("Invalid context, skipping llm")
+                self.audio_thread.start()
+                self.speaker_thread.start()
+
+                self.audio_thread.join()
+                self.speaker_thread.join()
+        except:
+            pass
 
 if __name__ == "__main__":
     main_thread = VoiceAwakeBackend("你好", time_to_sleep=5)
+    # main_thread = Backend()
     main_thread.start()
     main_thread.join()

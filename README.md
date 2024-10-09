@@ -114,7 +114,7 @@ class Speaker:
     def run(self, *args, **kwargs):
         raise
 ```
-### 语音唤醒
+## 语音唤醒
 这里主要介绍本组件的语音唤醒的工作原理。
 我们会使用“Main Work FLow”、“Monitor”和“Dida”三个模块来描述本组件的工作原理。
 - Main Work FLow：固定回复语音对话的核心程序。
@@ -128,6 +128,9 @@ class Speaker:
 2. 如果没有，则不激活；
 ![alt text](arch/architecture-voice-awake.png)
 
-```python
-
-```
+## 内容管控
+该模块的主要作用是监测并记录用户的输入，如果用户的输入不符合规定，则进行拦截。
+从技术上来说，重新实现Backend，需要在STT模块后添加一个监控模块：
+- 如果用户输入不符合规定，则停止对该query进行推理，并给出默认回复。
+- 如果符合规定，则继续运行后面的模块。
+![alt text](arch/context_recorder.png)
