@@ -42,7 +42,9 @@ def generate_random_filename(length=30, extension=".txt"):
     return ''.join(random.choices(string.ascii_lowercase + string.digits, k=length)) + extension
 
 def tts(
-        text
+        text,
+        *args,
+        **kwargs
 ):
     # 填写平台申请的appid, access_token以及cluster
     appid = os.environ.get("zijie_tts_app_id")
@@ -50,7 +52,10 @@ def tts(
 
     cluster = "volcano_tts"
 
-    voice_type = "BV005_streaming"
+    voice_type = kwargs.get("voice_type")
+    if not voice_type:
+        voice_type="BV005_streaming"
+        
     host = "openspeech.bytedance.com"
     api_url = f"https://{host}/api/v1/tts"
 

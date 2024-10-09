@@ -12,6 +12,16 @@ from aliyunsdkcore.acs_exception.exceptions import ClientException
 from aliyunsdkcore.acs_exception.exceptions import ServerException
 from aliyunsdknlp_automl.request.v20191111 import RunPreTrainServiceRequest
 
+# Aliyun Machine Translation
+from typing import List
+from threading import Thread
+from alibabacloud_tea_util import models as util_models
+from alibabacloud_tea_util.client import Client as UtilClient
+from alibabacloud_tea_openapi import models as open_api_models
+from alibabacloud_alimt20181012.models import TranslateGeneralResponse
+from alibabacloud_alimt20181012 import models as alimt_20181012_models
+from alibabacloud_alimt20181012.client import Client as alimt20181012Client
+
 sys.path.append(
     os.path.dirname(os.path.abspath(__file__))
 )
@@ -171,16 +181,19 @@ class LLM(threading.Thread):
         self._run2(response_iterator, *(self.args_for_run), **(self.kwargs_for_run))
 
 class TTS(threading.Thread):
-    def __init__(self, text_queue: queue.Queue, audio_queue: queue.Queue):
+    def __init__(self, text_queue: queue.Queue, audio_queue: queue.Queue, *args, **kwargs):
         """从Text queue队列中依次拿出sentence，并把其转换成音频，然后存储在一个Audio queue队列中。如果拿到结束标志符号END，则把这个符号放到Audio queue队列中。"""
         super().__init__(daemon=True)
 
         self.text_queue = text_queue
         self.audio_queue = audio_queue
+
+        self.args_for_run = args
+        self.kwargs_for_run = kwargs
     
     def _run(self, text, *args, **kwargs) -> str:
         '''把text转换成语音，并保存，然后返回语音文件路径。'''
-        return tts(text)
+        return tts(text, *self.args_for_run, **self.kwargs_for_run)
     
     def run(self, *args, **kwargs):
         while True:
@@ -189,7 +202,7 @@ class TTS(threading.Thread):
             if sentence is None:
                 self.audio_queue.put(None)
                 break
-            self.audio_queue.put(self._run(sentence))
+            self.audio_queue.put(self._run(sentence, *self.args_for_run, **self.kwargs_for_run))
 
 class Speaker(threading.Thread):
     def __init__(self, audio_queue: queue.Queue):
@@ -267,6 +280,126 @@ class ContextMonitor(threading.Thread):
             return False
         else:
             return True
+
+class MT(threading.Thread):
+    def __init__(self, text):
+        '''Module of Machine Translation'''
+        super().__init__(daemon=True)
+        self.text = text
+
+    @staticmethod
+    def create_client() -> alimt20181012Client:
+        """
+        使用AK&SK初始化账号Client
+        @return: Client
+        @throws Exception
+        """
+        # 工程代码泄露可能会导致 AccessKey 泄露，并威胁账号下所有资源的安全性。以下代码示例仅供参考。
+        # 建议使用更安全的 STS 方式，更多鉴权访问方式请参见：https://help.aliyun.com/document_detail/378659.html。
+        with open(os.path.join(os.path.dirname(os.path.abspath(__file__)), 'config.json')) as F:
+            args = json.load(F)
+            config = open_api_models.Config(
+                # 必填，请确保代码运行环境设置了环境变量 ALIBABA_CLOUD_ACCESS_KEY_ID。,
+                access_key_id=args['machine_translation_key_id'],
+                # 必填，请确保代码运行环境设置了环境变量 ALIBABA_CLOUD_ACCESS_KEY_SECRET。,
+                access_key_secret=args['machine_translation_secret_key']
+            )
+        # Endpoint 请参考 https://api.aliyun.com/product/alimt
+        config.endpoint = f'mt.cn-hangzhou.aliyuncs.com'
+        return alimt20181012Client(config)
+
+    def run(self):          
+        self.text['text'] = self.main(self.text['text'])
+
+    @staticmethod
+    def main(
+        source_text,
+        *args,
+        **kwargs
+    ) -> None:
+        client = MT.create_client()
+        translate_general_request = alimt_20181012_models.TranslateGeneralRequest(
+            format_type='text',
+            source_language='zh',
+            target_language='en',
+            source_text=source_text,
+            scene='general'
+        )
+        runtime = util_models.RuntimeOptions()
+        try:
+            result:TranslateGeneralResponse = client.translate_general_with_options(translate_general_request, runtime)
+            return result.body.data.translated
+        except Exception as error:
+            # 此处仅做打印展示，请谨慎对待异常处理，在工程项目中切勿直接忽略异常。
+            # 错误 message
+            print(error.message)
+            # 诊断地址
+            print(error.data.get("Recommend"))
+            UtilClient.assert_as_string(error.message)
+
+    @staticmethod
+    async def main_async(
+        args: List[str],
+    ) -> None:
+        client = MT.create_client()
+        translate_general_request = alimt_20181012_models.TranslateGeneralRequest(
+            format_type='text',
+            source_language='zh',
+            target_language='en',
+            source_text='你好',
+            scene='general'
+        )
+        runtime = util_models.RuntimeOptions()
+        try:
+            # 复制代码运行请自行打印 API 的返回值
+            await client.translate_general_with_options_async(translate_general_request, runtime)
+        except Exception as error:
+            # 此处仅做打印展示，请谨慎对待异常处理，在工程项目中切勿直接忽略异常。
+            # 错误 message
+            print(error.message)
+            # 诊断地址
+            print(error.data.get("Recommend"))
+            UtilClient.assert_as_string(error.message)
+
+
+class Backend(threading.Thread):
+    def __init__(self, *args, **kwargs):
+        """把整个异步对话模块整合成一个线程。"""
+        super().__init__(daemon=True)
+        self.text = kwargs.get("text", {"text": None})
+        self.text_queue = queue.Queue()
+        self.audio_queue = queue.Queue()
+
+        with open(os.path.join(os.path.dirname(os.path.abspath(__file__)), 'config.json')) as F:
+            _args = json.load(F)
+            self._ollama_model_name = _args['model_name']
+            self._ollama_base_url = _args['llm_url']
+            for key,value in _args.items():
+                os.environ[key] = value
+                
+        self.stt_thread = STT(lingji_stt_gradio_va, self.text)
+        self.input_preprocessing_thread = InputProcess(self.text, kwargs.get("history", None))
+        self.llm_thread = LLM(self.text, self.text_queue, ollama_model_name=self._ollama_model_name, ollama_base_url=self._ollama_base_url)
+        self.audio_thread = TTS(self.text_queue, self.audio_queue)
+        self.speaker_thread = Speaker(self.audio_queue)
+
+    def run(self,):
+        try:
+            self.stt_thread.start()
+            self.stt_thread.join()
+            
+            self.input_preprocessing_thread.start()
+            self.input_preprocessing_thread.join()
+            
+            self.llm_thread.start()
+            self.audio_thread.start()
+            self.speaker_thread.start()
+
+            self.llm_thread.join()
+            self.audio_thread.join()
+            self.speaker_thread.join()
+        except:
+            pass
 
 class VoiceAwakeBackend(multiprocessing.Process):
     global LOCK
@@ -442,46 +575,7 @@ class VoiceAwakeBackend(multiprocessing.Process):
         stt.start()
         stt.join()
 
-class Backend(threading.Thread):
-    def __init__(self, *args, **kwargs):
-        """把整个异步对话模块整合成一个线程。"""
-        super().__init__(daemon=True)
-        self.text = kwargs.get("text", {"text": None})
-        self.text_queue = queue.Queue()
-        self.audio_queue = queue.Queue()
-
-        with open(os.path.join(os.path.dirname(os.path.abspath(__file__)), 'config.json')) as F:
-            _args = json.load(F)
-            self._ollama_model_name = _args['model_name']
-            self._ollama_base_url = _args['llm_url']
-            for key,value in _args.items():
-                os.environ[key] = value
-                
-        self.stt_thread = STT(lingji_stt_gradio_va, self.text)
-        self.input_preprocessing_thread = InputProcess(self.text, kwargs.get("history", None))
-        self.llm_thread = LLM(self.text, self.text_queue, ollama_model_name=self._ollama_model_name, ollama_base_url=self._ollama_base_url)
-        self.audio_thread = TTS(self.text_queue, self.audio_queue)
-        self.speaker_thread = Speaker(self.audio_queue)
-
-    def run(self,):
-        try:
-            self.stt_thread.start()
-            self.stt_thread.join()
-            
-            self.input_preprocessing_thread.start()
-            self.input_preprocessing_thread.join()
-            
-            self.llm_thread.start()
-            self.audio_thread.start()
-            self.speaker_thread.start()
-
-            self.llm_thread.join()
-            self.audio_thread.join()
-            self.speaker_thread.join()
-        except:
-            pass
-
-class Backend(Backend):
+class ContextMonitorBackend(Backend):
     def __init__(self, prepared_text:str="你好，此次输入不合规，顾不做回答（此次对话不会记录到聊天记录中）。", *args, **kwargs):
         super().__init__(*args, **kwargs)
         
@@ -517,8 +611,31 @@ class Backend(Backend):
         except:
             pass
 
+class PureEnglishChatBackend(Backend):
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        self.machine_translation_thrad = MT(text=self.text)
+        self.audio_thread = TTS(self.text_queue, self.audio_queue, voice_type=kwargs.get("voice_type", None))
+    
+    def run(self):
+        self.stt_thread.start()
+        self.stt_thread.join()
+        
+        # self.machine_translation_thrad.start()
+        # self.machine_translation_thrad.join()
+        
+        self.llm_thread.start()
+        self.audio_thread.start()
+        self.speaker_thread.start()
+
+        self.llm_thread.join()
+        self.audio_thread.join()
+        self.speaker_thread.join()
+
+
 if __name__ == "__main__":
-    main_thread = VoiceAwakeBackend("你好", time_to_sleep=5)
+    # main_thread = VoiceAwakeBackend("你好", time_to_sleep=5)
     # main_thread = Backend()
+    main_thread = PureEnglishChatBackend(voice_type="BV503_streaming")
     main_thread.start()
     main_thread.join()
