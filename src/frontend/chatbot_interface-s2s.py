@@ -13,7 +13,7 @@ from typing import Generator
 sys.path.append(
     os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 )
-from AsyncAudioChat import Backend,LLM,STT,LOGGER,END,lingji_stt_gradio_va,ContextMonitorBackend,ContextMonitor,PREPARED_TEXT
+from AsyncAudioChat import Backend,LLM,STT,LOGGER,END,lingji_stt_gradio_va,ContextMonitorBackend,ContextMonitor,PREPARED_TEXT,PureEnglishChatBackend
 
 class STT(STT):
     def __init__(self, stt_api, text, *args, **kwargs):
@@ -76,7 +76,7 @@ class LLM(LLM):
         self.text_queue.put(END)    
         self.response_for_web_display.put(END) 
 
-class Backend(Backend):
+class Backend(PureEnglishChatBackend):
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
         
@@ -103,7 +103,7 @@ class ContextMonitor(ContextMonitor):
             self.response_for_web_display.put(self.prepared_text)
             self.response_for_web_display.put(END)
             self.text_queue.put(END)
-            
+
 class Backend(Backend, ContextMonitorBackend):
     def __init__(self, prepared_text: str = PREPARED_TEXT, *args, **kwargs):
         super().__init__(prepared_text, *args, **kwargs)

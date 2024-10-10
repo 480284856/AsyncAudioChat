@@ -117,7 +117,7 @@ class LLM(threading.Thread):
     
     def __run_ollama(self, query, *args, ollama_model_name, ollama_base_url, **kwargs):
         messages = [
-            ('system', "You are a helpful assistant and only can speak English."),
+            ('system', "You are a helpful assistant and only can speak English and Chinese."),
             ("human", query)
         ]
         self.model = ChatOllama(
@@ -638,9 +638,9 @@ class VoiceAwakeBackend(multiprocessing.Process):
 
 
 if __name__ == "__main__":
-    # main_thread = VoiceAwakeBackend("你好", time_to_sleep=5)
+    main_thread = VoiceAwakeBackend("你好", time_to_sleep=5)
     # main_thread = Backend()
     # main_thread = PureEnglishChatBackend(input_type="zh")
-    main_thread = PureEnglishChatBackend()
+    # main_thread = PureEnglishChatBackend()
     main_thread.start()
     main_thread.join()
