@@ -130,6 +130,7 @@ class Speaker:
 ![alt text](arch/architecture-voice-awake.png)
 
 ## 内容管控
+[![Watch the video](https://img.youtube.com/vi/2jdgFDS6OHE/maxresdefault.jpg)](https://youtu.be/2jdgFDS6OHE)
 该模块的主要作用是监测并记录用户的输入，如果用户的输入不符合规定，则进行拦截。
 从技术上来说，重新实现Backend，需要在STT模块后添加一个监控模块：
 - 如果用户输入不符合规定，则停止对该query进行推理，并给出默认回复。
