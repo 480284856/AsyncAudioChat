@@ -115,6 +115,7 @@ class Speaker:
         raise
 ```
 ## 语音唤醒
+[![Watch the video](https://img.youtube.com/vi/2jdgFDS6OHE/maxresdefault.jpg)](https://youtu.be/2jdgFDS6OHE)
 这里主要介绍本组件的语音唤醒的工作原理。
 我们会使用“Main Work FLow”、“Monitor”和“Dida”三个模块来描述本组件的工作原理。
 - Main Work FLow：固定回复语音对话的核心程序。
