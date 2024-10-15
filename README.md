@@ -20,7 +20,7 @@
 {
     "lingji_key": "sk-xxx",            // 阿里云的灵积语音服务的api key                             
     "llm_url": "192.168.65.254:62707", // 模型的url，这里需要是使用Ollama部署的模型
-    "model_name": "qwen2:0.5b",        // 模型的名称
+    "model_name": "qwen2:0.5b",        // ollama中的模型的名称
     "zijie_tts_app_id": "xxx",         // 字节跳动的火山引擎的语音合成服务的app id
     "zijie_tts_access_token": "xxx"    // 字节跳动的火山引擎的语音合成服务的access token
 }
