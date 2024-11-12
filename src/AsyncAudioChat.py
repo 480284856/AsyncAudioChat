@@ -3,10 +3,13 @@ import sys
 import time
 import json
 import queue
+import random
+import string
 import logging
 import threading
 import multiprocessing
 
+from flask import Flask, request
 from aliyunsdkcore.client import AcsClient
 from aliyunsdkcore.acs_exception.exceptions import ClientException
 from aliyunsdkcore.acs_exception.exceptions import ServerException
@@ -59,6 +62,7 @@ def get_logger():
     return logger
 
 LOGGER = get_logger()
+app = Flask(__name__)
 
 class STT(threading.Thread):
     def __init__(self, stt_api, text, *args, **kwargs):
@@ -76,6 +80,46 @@ class STT(threading.Thread):
         # import random
         # self.text['text'] = random.choice(["你好", "你是谁?"])
 
+class RemoteSTT(STT):
+    def __init__(self, stt_api_for_1file, text, *args, **kwargs):
+        '''
+        stt_api_for_1file: 一个函数，接收一个音频文件路径，返回一个字符串。
+        '''
+        STT.__init__(self, stt_api_for_1file, text, *args, **kwargs)
+        self.audio_queue = multiprocessing.Queue()
+
+    def run(self):
+        # Start Flask server in a separate thread
+        server_thread = Thread(target=self.start_flask, daemon=True)
+        server_thread.start()
+        
+        # Process audio data from the queue
+        while True:
+            if not self.audio_queue.empty():
+                audio_data = self.audio_queue.get()
+                random_name = self.generate_random_name()
+                audio_file = f"{random_name}.wav"
+                with open(audio_file, 'wb') as f:
+                    f.write(audio_data)
+                self.text['text'] = self.stt_api(audio_file)
+                LOGGER.info(f"Transcribed Text: {self.text['text']}")
+                break
+            else:
+                time.sleep(1)
+                LOGGER.info("Waiting for audio data...")
+
+    def start_flask(self):
+        @app.route('/upload', methods=['POST'])
+        def receive_audio():
+            audio_data = request.data
+            self.audio_queue.put(audio_data)
+            return 'Audio data received', 200
+
+        app.run(host='0.0.0.0', port=5000, debug=False, use_reloader=False)
+
+    def generate_random_name(self, length=8):
+        return ''.join(random.choices(string.ascii_lowercase + string.digits, k=length))
+    
 class InputProcess(threading.Thread):
     def __init__(self, user_input, history=None, *args, **kwargs):
         super().__init__(daemon=True)
@@ -638,9 +682,12 @@ class VoiceAwakeBackend(multiprocessing.Process):
 
 
 if __name__ == "__main__":
+    
     # main_thread = VoiceAwakeBackend("你好", time_to_sleep=5)
-    main_thread = Backend()
-    # main_thread = PureEnglishChatBackend(input_type="zh")
+    # main_thread = Backend()
+    # main_thread = ContextMonitorBackend()
+    main_thread = PureEnglishChatBackend(input_type="zh")
     # main_thread = PureEnglishChatBackend()
     main_thread.start()
     main_thread.join()
+    
