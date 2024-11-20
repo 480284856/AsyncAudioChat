@@ -214,8 +214,8 @@ def lingji_stt_gradio_va(*args, **kwargs) -> str:
 
 
 if __name__ == "__main__":
-    if dashscope.api_key is None:
-        logger = get_logger("stt_key_checker")
+    if os.environ.get('lingji_key') is None:
+        logger = get_logger("api_key_checker")
         logger.error("Please set your DashScope API key in the environment variable DASH_SCOPE_API_KEY")
         exit(1)
     lingji_stt_gradio_va()

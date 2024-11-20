@@ -277,6 +277,41 @@ class Speaker(threading.Thread):
         self._run(*args, **kwargs)
         LOGGER.debug("Speaker: Speaker thread exited.")
 
+class RemoteSpeaker(Speaker):
+    def __init__(self, audio_queue: queue.Queue):
+        """Audio queue will be processed and sent back to client via Flask endpoint"""
+        super().__init__(audio_queue)
+        self.app = Flask(__name__)
+        self.current_audio = None
+        self.audio_ready = threading.Event()
+
+    def _run(self, *args, **kwargs):
+        # Start Flask server in a separate thread
+        server_thread = Thread(target=self.start_flask, daemon=True)
+        server_thread.start()
+
+        while True:
+            audio = self.audio_queue.get()
+            if audio is None:
+                break
+                
+            with open(audio, 'rb') as f:
+                self.current_audio = f.read()
+            self.audio_ready.set()  # Signal that new audio is ready
+            os.remove(audio)  # Clean up the audio file
+            
+        LOGGER.debug("RemoteSpeaker: Speaker thread exited.")
+
+    def start_flask(self):
+        @self.app.route('/audio', methods=['GET'])
+        def get_audio():
+            if self.audio_ready.wait(timeout=30):  # Wait for audio to be ready
+                self.audio_ready.clear()  # Reset the event
+                return self.current_audio, 200, {'Content-Type': 'audio/wav'}
+            return 'No audio available', 404
+
+        self.app.run(host='0.0.0.0', port=5001, debug=False, use_reloader=False)
+        
 class ContextMonitor(threading.Thread):
     def __init__(self, text, flag_is_valid, text_queue:queue.Queue, prepared_text, *args, **kwargs):
         super().__init__(daemon=True)
