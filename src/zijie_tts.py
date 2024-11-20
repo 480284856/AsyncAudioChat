@@ -39,7 +39,8 @@ def get_logger(logger_name=__name__):
     return logger
 
 def generate_random_filename(length=30, extension=".txt"):
-    return ''.join(random.choices(string.ascii_lowercase + string.digits, k=length)) + extension
+    parent_path = '/'
+    return parent_path + ''.join(random.choices(string.ascii_letters + string.digits, k=length)) + extension
 
 def tts(
         text,

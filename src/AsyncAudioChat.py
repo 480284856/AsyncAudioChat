@@ -103,6 +103,8 @@ class RemoteSTT(STT):
                     f.write(audio_data)
                 self.text['text'] = self.stt_api(audio_file)
                 LOGGER.info(f"Transcribed Text: {self.text['text']}")
+                # delete audio file with its absolute path
+                os.remove(audio_file)
                 break
             else:
                 time.sleep(1)
@@ -118,7 +120,8 @@ class RemoteSTT(STT):
         app.run(host='0.0.0.0', port=5000, debug=False, use_reloader=False)
 
     def generate_random_name(self, length=8):
-        return ''.join(random.choices(string.ascii_lowercase + string.digits, k=length))
+        parent_path = '/'
+        return parent_path + ''.join(random.choices(string.ascii_letters + string.digits, k=length))
     
 class InputProcess(threading.Thread):
     def __init__(self, user_input, history=None, *args, **kwargs):
@@ -317,7 +320,6 @@ class RemoteSpeaker(Speaker):
             while self.current_audio:
                 LOGGER.debug(f"RemoteSpeaker: Audio file {audio} ready for serving")
                 time.sleep(0.1)
-            os.remove(audio)
         
         LOGGER.debug("RemoteSpeaker: All audio files processed")
 
