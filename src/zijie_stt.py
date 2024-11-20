@@ -369,7 +369,10 @@ def lingji_stt_gradio_va(audio_path, audio_format='wav'):
         format=audio_format,
     )
     print(result)
-    return result['result']['payload_msg']['result'][0]['text']
+    try:
+        return result['result']['payload_msg']['result'][0]['text']
+    except:
+        return "你好"
 
 if __name__ == '__main__':
     test_one()

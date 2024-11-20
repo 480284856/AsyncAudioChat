@@ -4,28 +4,25 @@
 
 **New Features:**
 1. **RemoteSpeaker Integration:**
-   - Introduced the `RemoteSpeaker` class which inherits from the base `Speaker` class.
-   - Implemented Flask server functionality to serve processed audio files via HTTP.
-   - Added `/audio` endpoint that clients can poll to receive audio responses.
-   - Implemented thread-safe coordination between audio processing and serving using `threading.Event`.
-   - Added automatic cleanup of audio files after serving to prevent storage issues.
+   - Introduced the `RemoteSpeaker` class inheriting from base `Speaker` class
+   - Implemented Flask server functionality to serve processed audio files via HTTP
+   - Added `/audio` endpoint for audio retrieval
+   - Implemented thread-safe coordination using `threading.Event`
+   - Added automatic cleanup of audio files
 
 **Architecture Changes:**
 1. **Audio Distribution:**
-   - Modified audio playback system to support remote clients instead of local playback.
-   - Separated audio serving (port 5001) from STT receiving (port 5000) for better service isolation.
+   - Modified audio playback system to support remote clients
+   - Single port design (5000) handling both STT and audio serving
+   - RemoteSpeaker reuses port after RemoteSTT termination
 
 **Usage:**
 - To use `RemoteSpeaker`, initialize it with an audio queue and start the process. The Flask server will handle sending processed audio back to clients.
 
 ```python
-import os
-import sys
-import threading
-import queue
-from flask import Flask
+from src.AsyncAudioChat import Backend, RemoteSTT, RemoteSpeaker
+from src.zijie_stt import lingji_stt_gradio_va
 
-from src.AsyncAudioChat import Backend, RemoteSTT, RemoteSpeaker, LOGGER
 
 class Backend(Backend):
     def __init__(self, *args, **kwargs):
@@ -54,7 +51,23 @@ if response.status_code == 200:
     with open('output.wav', 'wb') as f:
         f.write(response.content)
 ```
+It should be noticed that a `config.json` with a structure written below should exist in the same directory of a .py file containing the demo above.
+```json
+{
+    "lingji_key": "sk-",          
+    "llm_url": "http://172.17.0.3:11434",
+    "model_name": "llama3.1:latest",
+    "zijie_tts_app_id": "xx",
+    "zijie_tts_access_token": "xx-",
+    
+    "embedding_model_url": "http://172.17.0.3:11434",
+    "name_embedding_model": "nomic-embed-text",
 
+    "zijie_stt_appid": "xx",
+    "zijie_stt_token": "xx-",
+    "zijie_stt_cluster": "xx"
+}
+```
 This update completes the remote audio processing pipeline, allowing for distributed audio processing and playback.
 
 

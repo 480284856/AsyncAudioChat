@@ -72,7 +72,7 @@ def tts(
         },
         "audio": {
             "voice_type": voice_type,
-            "encoding": "mp3",
+            "encoding": "wav",
             "speed_ratio": 1.0,
             "volume_ratio": 1.0,
             "pitch_ratio": 1.0,
@@ -93,7 +93,7 @@ def tts(
         # print(f"resp body: \n{resp.json()}")
         if "data" in resp.json():
             data = resp.json()["data"]
-            file_to_save = generate_random_filename(extension=".mp3")
+            file_to_save = generate_random_filename(extension=".wav")
             file_to_save = os.path.join(os.path.dirname(__file__), file_to_save)
             file_to_save = open(file_to_save, "wb")
             file_to_save.write(base64.b64decode(data))
