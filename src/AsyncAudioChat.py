@@ -286,7 +286,12 @@ class RemoteSpeaker(Speaker):
         super().__init__(audio_queue)
         self.current_audio = None
         self.audio_ready = threading.Event()
-        
+        # Clears existing Flask routes before adding new ones
+        # Ensures no route conflicts between RemoteSTT and RemoteSpeaker
+        # Allows the same port to be reused properly
+        app.url_map._rules.clear()
+        app.url_map._rules_by_endpoint.clear()
+
         @app.route('/audio', methods=['GET'])
         def serve_audio():
             # Wait for audio to be ready
@@ -295,7 +300,7 @@ class RemoteSpeaker(Speaker):
                     with open(self.current_audio, 'rb') as f:
                         audio_data = f.read()
                     # Clean up after serving
-                    os.remove(self.current_audio)
+                    # os.remove(self.current_audio)
                     self.current_audio = None
                     self.audio_ready.clear()
                     return audio_data, 200
@@ -304,7 +309,7 @@ class RemoteSpeaker(Speaker):
     def _run(self, *args, **kwargs):
         # Start Flask server in a separate thread
         # the container only exposes port 5000, and the RemoteSTT is terminated after before this thread is started, so we can reuse the port.
-        server_thread = Thread(target=lambda: app.run(host='0.0.0.0', port=5000, debug=True, use_reloader=False), daemon=True)
+        server_thread = Thread(target=lambda: app.run(host='0.0.0.0', port=5000, debug=True, use_reloader=False, threaded=True), daemon=True)
         server_thread.start()
 
         # Process audio files from queue
