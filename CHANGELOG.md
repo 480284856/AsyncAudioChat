@@ -1,5 +1,43 @@
 # Update Log for `AsyncAudioChat.py`
 
+### Date: 2024-11-21
+
+**New Features:**
+1. **RemoteSpeaker Class:**
+   - Introduced the `RemoteSpeaker` class inheriting from the base `Speaker` class.
+   - Implemented Flask server functionality to serve processed audio files via HTTP.
+   - Added `/audio` endpoint for audio retrieval.
+   - Implemented thread-safe coordination using `threading.Event`.
+   - Added automatic cleanup of audio files after serving.
+   - Utilized `@after_this_request` to ensure the object of class is terminated after the final response is sent to the client.
+   - Modified the `/audio` endpoint to return a `204 No Content` status when the end of the audio stream is reached.
+
+**Key Features:**
+- Uses `@after_this_request` to ensure the object of class isn't shutdown before the final response is sent to the client.
+
+**System Architecture:**
+```
+Client -> RemoteSTT (5000) -> Processing -> RemoteSpeaker (5000) -> Client
+```
+
+**API Endpoints:**
+
+**Audio Upload (Port 5000)**
+- `POST /upload`: Submit audio for processing
+
+**Audio Retrieval (Port 5000)**
+- `GET /audio`: Retrieve processed audio file
+- Returns:
+  - 200: Audio data on success
+  - 404: When no audio available
+  - 204: End of audio stream
+
+**Implementation Notes:**
+- Threaded design ensures continuous processing.
+- Event-based coordination prevents race conditions.
+- 30-second timeout on audio retrieval.
+- Automatic file cleanup post-serving.
+
 ### Date: 2024-11-13
 
 **New Features:**
