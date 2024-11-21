@@ -1,6 +1,6 @@
 <mxfile host="65bd71144e">
     <diagram name="第 1 页" id="Wu566Kua2JstjRgyABkP">
-        <mxGraphModel dx="971" dy="475" grid="1" gridSize="10" guides="1" tooltips="1" connect="1" arrows="1" fold="1" page="1" pageScale="1" pageWidth="827" pageHeight="1169" math="0" shadow="0">
+        <mxGraphModel dx="1078" dy="485" grid="1" gridSize="10" guides="1" tooltips="1" connect="1" arrows="1" fold="1" page="1" pageScale="1" pageWidth="827" pageHeight="1169" math="0" shadow="0">
             <root>
                 <mxCell id="0"/>
                 <mxCell id="1" parent="0"/>
@@ -38,10 +38,7 @@
                     <mxGeometry x="650" y="980" width="60" height="30" as="geometry"/>
                 </mxCell>
                 <mxCell id="oR2MWclAaf6PLa6PnVYV-91" value="Modules" style="text;html=1;align=center;verticalAlign=middle;whiteSpace=wrap;rounded=0;" parent="1" vertex="1">
-                    <mxGeometry x="640" y="1690" width="60" height="30" as="geometry"/>
-                </mxCell>
-                <mxCell id="KWj4d7zj0b5VkLXG1piS-1" value="Machine Translation" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#d5e8d4;strokeColor=#82b366;" parent="1" vertex="1">
-                    <mxGeometry x="240" y="1650" width="120" height="60" as="geometry"/>
+                    <mxGeometry x="650" y="1690" width="60" height="30" as="geometry"/>
                 </mxCell>
                 <mxCell id="KWj4d7zj0b5VkLXG1piS-19" value="" style="group" parent="1" vertex="1" connectable="0">
                     <mxGeometry x="40" y="1400" width="660" height="120" as="geometry"/>
@@ -109,16 +106,19 @@
                     <mxGeometry x="100" y="1580" width="120" height="60" as="geometry"/>
                 </mxCell>
                 <mxCell id="11" value="InputPreprocessing" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#d5e8d4;strokeColor=#82b366;fontColor=#000000;" parent="1" vertex="1">
-                    <mxGeometry x="240" y="1650" width="120" height="60" as="geometry"/>
+                    <mxGeometry x="380" y="1650" width="120" height="60" as="geometry"/>
                 </mxCell>
                 <mxCell id="12" value="Machine Translation" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#d5e8d4;strokeColor=#82b366;fontColor=#000000;" parent="1" vertex="1">
-                    <mxGeometry x="380" y="1650" width="120" height="60" as="geometry"/>
+                    <mxGeometry x="530" y="1650" width="120" height="60" as="geometry"/>
                 </mxCell>
                 <mxCell id="13" value="LLM" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#d5e8d4;strokeColor=#82b366;fontColor=#000000;" parent="1" vertex="1">
                     <mxGeometry x="380" y="1580" width="120" height="60" as="geometry"/>
                 </mxCell>
                 <mxCell id="14" value="固定回复交互" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#fff2cc;strokeColor=#d6b656;fontColor=#000000;" parent="1" vertex="1">
                     <mxGeometry x="310" y="965" width="120" height="60" as="geometry"/>
+                </mxCell>
+                <mxCell id="15" value="RemoteSpeaker" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#d5e8d4;strokeColor=#82b366;fontColor=#000000;" vertex="1" parent="1">
+                    <mxGeometry x="240" y="1650" width="120" height="60" as="geometry"/>
                 </mxCell>
             </root>
         </mxGraphModel>
