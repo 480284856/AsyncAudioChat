@@ -289,12 +289,24 @@ class RemoteSpeaker(Speaker):
         self.audio_ready = threading.Event()
         self.end_of_audio = False
         self.final_request_received = threading.Event()
+        self.workflow_started = threading.Event()  # New event for workflow control
         
         app.url_map._rules.clear()
         app.url_map._rules_by_endpoint.clear()
 
+        @app.route('/start', methods=['POST'])
+        def receive_start_signal():
+            """Endpoint to receive the initial greeting message"""
+            self.workflow_started.set()
+            LOGGER.debug("RemoteSpeaker: Received start signal")
+            return 'Workflow started', 200
+
         @app.route('/audio', methods=['GET'])
         def serve_audio():
+            # Only serve audio after receiving start signal
+            if not self.workflow_started.is_set():
+                return 'Workflow not started', 403
+
             if self.end_of_audio:
                 @after_this_request
                 def set_final_received(response):
@@ -319,6 +331,12 @@ class RemoteSpeaker(Speaker):
         server_thread = Thread(target=lambda: app.run(host='0.0.0.0', port=5000, debug=True, use_reloader=False, threaded=True), daemon=True)
         server_thread.start()
 
+        # Wait for start signal before processing audio queue
+        LOGGER.debug("RemoteSpeaker: Waiting for start signal...")
+        if not self.workflow_started.wait(timeout=300):
+            LOGGER.error("RemoteSpeaker: Timeout waiting for start signal")
+            return
+
         while True:
             audio = self.audio_queue.get()
             if audio is None:
@@ -338,6 +356,7 @@ class RemoteSpeaker(Speaker):
                 time.sleep(0.1)
         
         LOGGER.debug("RemoteSpeaker: All audio files processed")
+
 
 class ContextMonitor(threading.Thread):
     def __init__(self, text, flag_is_valid, text_queue:queue.Queue, prepared_text, *args, **kwargs):

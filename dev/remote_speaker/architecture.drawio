@@ -1,6 +1,6 @@
 <mxfile host="65bd71144e">
     <diagram id="sJbom_5L6VdSvB-PTzJs" name="Page-1">
-        <mxGraphModel dx="1192" dy="826" grid="1" gridSize="10" guides="1" tooltips="1" connect="1" arrows="1" fold="1" page="1" pageScale="1" pageWidth="850" pageHeight="1100" math="0" shadow="0">
+        <mxGraphModel dx="2663" dy="1186" grid="1" gridSize="10" guides="1" tooltips="1" connect="1" arrows="1" fold="1" page="1" pageScale="1" pageWidth="850" pageHeight="1100" math="0" shadow="0">
             <root>
                 <mxCell id="0"/>
                 <mxCell id="1" parent="0"/>
@@ -112,13 +112,13 @@
                 <mxCell id="42" value="History" style="text;html=1;align=center;verticalAlign=middle;resizable=0;points=[];autosize=1;strokeColor=none;fillColor=none;" parent="1" vertex="1">
                     <mxGeometry x="-430" y="195" width="60" height="30" as="geometry"/>
                 </mxCell>
-                <mxCell id="44" value="" style="outlineConnect=0;dashed=0;verticalLabelPosition=bottom;verticalAlign=top;align=center;html=1;shape=mxgraph.aws3.hardware_board;fillColor=#5294CF;gradientColor=none;" vertex="1" parent="1">
+                <mxCell id="44" value="" style="outlineConnect=0;dashed=0;verticalLabelPosition=bottom;verticalAlign=top;align=center;html=1;shape=mxgraph.aws3.hardware_board;fillColor=#5294CF;gradientColor=none;" parent="1" vertex="1">
                     <mxGeometry x="-840" y="989.75" width="84" height="100.5" as="geometry"/>
                 </mxCell>
-                <mxCell id="45" value="Audio" style="html=1;strokeColor=none;fillColor=#0079D6;labelPosition=center;verticalLabelPosition=middle;verticalAlign=top;align=center;fontSize=12;outlineConnect=0;spacingTop=-6;fontColor=#FFFFFF;sketch=0;shape=mxgraph.sitemap.audio;" vertex="1" parent="1">
+                <mxCell id="45" value="Audio" style="html=1;strokeColor=none;fillColor=#0079D6;labelPosition=center;verticalLabelPosition=middle;verticalAlign=top;align=center;fontSize=12;outlineConnect=0;spacingTop=-6;fontColor=#FFFFFF;sketch=0;shape=mxgraph.sitemap.audio;" parent="1" vertex="1">
                     <mxGeometry x="-710" y="989.75" width="60" height="40" as="geometry"/>
                 </mxCell>
-                <mxCell id="46" value="HTTP" style="text;html=1;align=center;verticalAlign=middle;resizable=0;points=[];autosize=1;strokeColor=none;fillColor=none;" vertex="1" parent="1">
+                <mxCell id="46" value="HTTP" style="text;html=1;align=center;verticalAlign=middle;resizable=0;points=[];autosize=1;strokeColor=none;fillColor=none;" parent="1" vertex="1">
                     <mxGeometry x="-705" y="1045" width="50" height="30" as="geometry"/>
                 </mxCell>
             </root>

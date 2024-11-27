@@ -1,5 +1,14 @@
 # Update Log for `AsyncAudioChat.py`
 
+### Date: 2024-11-27
+
+**Update:**
+1. **RemoteSpeaker Workflow Update:**
+   - Added a `/start` endpoint to receive a greeting message from the dev board.
+   - The `RemoteSpeaker` now begins processing audio only after receiving the start signal.
+   - Ensures the workflow is initiated correctly before serving audio files.
+    ![alt text](pic/new_feature_2024_11_27_remotespeaker.png)
+
 ### Date: 2024-11-21
 
 **New Features:**
