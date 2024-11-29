@@ -1,5 +1,12 @@
 # Update Log for `AsyncAudioChat.py`
 
+### Date: 2024-11-21
+
+- **RemoteSpeaker Enhancement [(for details)](dev/remote_speaker/2024-11-29--a9f9f56894a030928dad4e06b095c88f3a19bd76/README.md) :**
+  - Updated `RemoteSpeaker` class to send a flag when `audio` is `None`, indicating no more files to send.
+  - Modified the `/audio` endpoint to return a `204 No Content` status when the end of the audio stream is reached.
+  - Utilized `@after_this_request` to ensure `final_request_received` is set after the response is sent to the client.
+
 ### Date: 2024-11-27
 
 **Update:**
