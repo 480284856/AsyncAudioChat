@@ -290,8 +290,7 @@ class RemoteSpeaker(Speaker):
         self.end_of_audio = False
         self.final_request_received = threading.Event()
         self.workflow_started = threading.Event()  # New event for workflow control
-        self.last_heartbeat = time.time()
-        self.heartbeat_timeout = 2500  # 25 second timeout
+        self.heartbeat_timeout = 10  # 25 second timeout
         self.should_terminate = threading.Event()  # New event for graceful termination
         
         app.url_map._rules.clear()
@@ -306,10 +305,15 @@ class RemoteSpeaker(Speaker):
         #     LOGGER.debug("RemoteSpeaker: Received start signal")
         #     return 'Workflow started', 200
 
+
+        # I may receive a heartbeat from client before the class' start method is called 
+        # because this method is registered when the class is instantiated.
+        # so I can receive a heartbeat when the RemoteSTT thread is running.
         @app.route('/heartbeat', methods=['POST', 'GET'])
         def heartbeat():
             """Endpoint to receive heartbeat from client"""
             self.last_heartbeat = time.time()
+            LOGGER.debug("RemoteSpeaker: Heartbeat received")
             return 'Heartbeat received', 200
 
         @app.route('/audio', methods=['GET'])
@@ -354,6 +358,8 @@ class RemoteSpeaker(Speaker):
                 # Start heartbeat monitor thread
                 heartbeat_thread = Thread(target=self._monitor_heartbeat, daemon=True)
                 heartbeat_thread.start()
+                LOGGER.debug("RemoteSpeaker: Heartbeat monitor thread started")
+
                 flag_first_audio = False
 
             self.current_audio = audio
@@ -376,6 +382,9 @@ class RemoteSpeaker(Speaker):
 
     def _monitor_heartbeat(self):
         """Monitor heartbeat and terminate if client is unresponsive"""
+        # Reset last_heartbeat when starting the monitor
+        self.last_heartbeat = time.time()
+
         while not self.should_terminate.is_set():
             time.sleep(1)
             if time.time() - self.last_heartbeat > self.heartbeat_timeout:
