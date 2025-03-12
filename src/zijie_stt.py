@@ -23,6 +23,7 @@ from typing import List
 from urllib.parse import urlparse
 import time
 import websockets
+import numpy as np
 
 PROTOCOL_VERSION = 0b0001
 DEFAULT_HEADER_SIZE = 0b0001
@@ -353,7 +354,7 @@ def test_one():
     print(result)
     return result['result']['payload_msg']['result'][0]['text']
 
-def lingji_stt_gradio_va(audio_path, audio_format='wav'):
+def _zijie_stt_gradio(audio_path, audio_format='wav'):
     # get from environment
     appid = os.environ.get("zijie_stt_appid")
     token = os.environ.get("zijie_stt_token")
@@ -372,7 +373,112 @@ def lingji_stt_gradio_va(audio_path, audio_format='wav'):
     try:
         return result['result']['payload_msg']['result'][0]['text']
     except:
-        return "你好"
+        return "周围太吵啦，听不清楚"
+
+
+def record_audio(audio_path, max_duration=15, silence_threshold=1500, silence_duration=1.2, sample_rate=16000, channels=1):
+    """
+    录制音频。调用麦克风录制音频，并保存为wav格式。
+    检测用户停止说话后自动终止录音。
+    
+    Args:
+        audio_path (str): 保存音频文件的路径
+        max_duration (int): 最大录音时长（秒），默认30秒
+        silence_threshold (int): 静音检测阈值，越小越敏感，默认1000
+        silence_duration (float): 检测到静音多长时间后停止录音（秒），默认2秒
+        sample_rate (int): 采样率，默认16000Hz
+        channels (int): 声道数，默认1（单声道）
+    
+    Returns:
+        str: 录制完成的音频文件路径
+    """
+    try:
+        import pyaudio
+        import wave
+        import time
+        
+        # 配置参数
+        chunk = 1024  # 每个缓冲区的帧数
+        sample_format = pyaudio.paInt16  # 16位深度
+        
+        print("开始录音，请说话...")
+        print(f"将在检测到 {silence_duration} 秒静音后自动停止，或在 {max_duration} 秒后强制停止")
+        
+        # 初始化PyAudio
+        p = pyaudio.PyAudio()
+        
+        # 打开音频流
+        stream = p.open(format=sample_format,
+                        channels=channels,
+                        rate=sample_rate,
+                        frames_per_buffer=chunk,
+                        input=True)
+        
+        # 初始化帧列表和变量
+        frames = []
+        silent_chunks = 0
+        silent_threshold_chunks = int(silence_duration * sample_rate / chunk)
+        is_speaking = False
+        start_time = time.time()
+        
+        # 录制音频
+        while True:
+            # 检查是否超过最大录音时长
+            if time.time() - start_time > max_duration:
+                print(f"已达到最大录音时长 {max_duration} 秒，停止录音")
+                break
+                
+            # 读取音频数据
+            data = stream.read(chunk, exception_on_overflow=False)
+            frames.append(data)
+            
+            # 计算音量
+            audio_data = np.frombuffer(data, dtype=np.int16)
+            volume = np.abs(audio_data).mean()
+            
+            # 检测是否有声音
+            if volume > silence_threshold:
+                silent_chunks = 0
+                if not is_speaking:
+                    is_speaking = True
+                    print("检测到声音，正在录音...")
+            else:
+                silent_chunks += 1
+                
+                # 如果已经开始说话，且静音持续时间超过阈值，则停止录音
+                if is_speaking and silent_chunks >= silent_threshold_chunks:
+                    print(f"检测到 {silence_duration} 秒静音，停止录音")
+                    break
+        
+        # 停止并关闭音频流
+        stream.stop_stream()
+        stream.close()
+        p.terminate()
+        
+        print("录音完成！")
+        
+        # 保存为WAV文件
+        wf = wave.open(audio_path, 'wb')
+        wf.setnchannels(channels)
+        wf.setsampwidth(p.get_sample_size(sample_format))
+        wf.setframerate(sample_rate)
+        wf.writeframes(b''.join(frames))
+        wf.close()
+        
+        print(f"音频已保存至: {audio_path}")
+        return audio_path
+        
+    except ImportError:
+        print("请安装必要的库: pip install pyaudio numpy")
+        return None
+    except Exception as e:
+        print(f"录音过程中出错: {str(e)}")
+        return None
+
+def zijie_stt_gradio(*args, **kwargs):
+    audio_path = record_audio("test.wav")
+    return _zijie_stt_gradio(audio_path)
 
 if __name__ == '__main__':
     test_one()
+    # record_audio("test.wav", duration=5)

@@ -34,7 +34,7 @@ from pygame import mixer
 from zijie_tts import tts
 from langchain_ollama import ChatOllama 
 from ali_stt_voice_awake import lingji_stt_gradio_va
-
+from zijie_stt import zijie_stt_gradio
 END = None  # 使用None表示结束标识符
 OUTPUT_LOG_DEBUG = True # 是否输出日志
 PREPARED_TEXT = "你好，此次输入不合规，顾不做回答（此次对话不会记录到聊天记录中）。" # 内容审核模块，如果输入不合规，则输出默认回复
@@ -262,20 +262,24 @@ class Speaker(threading.Thread):
     
     def _run(self, *args, **kwargs):
         # 使用mixer类进行播放         
-        mixer.init()
-        while True:
-            audio = self.audio_queue.get()
-            if audio is None:
-                break
-            
-            mixer.music.load(audio)
-            mixer.music.play()
-            while mixer.music.get_busy():
-                time.sleep(0.001)
-            
-            mixer.music.unload()
-            os.remove(audio)
-        mixer.quit()
+        try:
+            mixer.init()
+            while True:
+                audio = self.audio_queue.get()
+                # LOGGER.debug("Speaker: Received audio: {}".format(audio))
+                if audio is None:
+                    break
+                
+                mixer.music.load(audio)
+                mixer.music.play()
+                while mixer.music.get_busy():
+                    time.sleep(0.001)
+                
+                mixer.music.unload()
+                os.remove(audio)
+            mixer.quit()
+        except Exception as e:
+            LOGGER.error("Speaker: Error in _run: {}".format(e))
     
     def run(self, *args, **kwargs):
         self._run(*args, **kwargs)
@@ -538,7 +542,7 @@ class Backend(threading.Thread):
             for key,value in _args.items():
                 os.environ[key] = value
                 
-        self.stt_thread = STT(lingji_stt_gradio_va, self.text)
+        self.stt_thread = STT(zijie_stt_gradio, self.text)
         self.input_preprocessing_thread = InputProcess(self.text, kwargs.get("history", None))
         self.llm_thread = LLM(self.text, self.text_queue, ollama_model_name=self._ollama_model_name, ollama_base_url=self._ollama_base_url)
         self.audio_thread = TTS(self.text_queue, self.audio_queue)
@@ -792,17 +796,17 @@ class VoiceAwakeBackend(multiprocessing.Process):
         mixer.quit()  
 
     def __kw_detector(self, text):
-        stt = STT(lingji_stt_gradio_va, text)
+        stt = STT(zijie_stt_gradio, text)
         stt.start()
         stt.join()
 
 
 if __name__ == "__main__":
     
-    # main_thread = VoiceAwakeBackend("你好", time_to_sleep=5)
+    main_thread = VoiceAwakeBackend("你好", time_to_sleep=5)
     # main_thread = Backend()
     # main_thread = ContextMonitorBackend()
-    main_thread = PureEnglishChatBackend(input_type="zh")
+    # main_thread = PureEnglishChatBackend(input_type="zh")
     # main_thread = PureEnglishChatBackend()
     main_thread.start()
     main_thread.join()

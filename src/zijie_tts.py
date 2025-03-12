@@ -8,6 +8,7 @@ import string
 import pyaudio
 import logging
 import requests
+import traceback
 import threading
 
 from pathlib import Path
@@ -102,7 +103,7 @@ def tts(
             file_to_save:str
             return file_to_save.name
     except Exception as e:
-        e.with_traceback()
+        traceback.print_exc()
 
 class AudioProducer(threading.Thread):
     def __init__(self, text_queue, audio_queue, daemon=True):

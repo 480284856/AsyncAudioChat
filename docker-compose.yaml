@@ -1,0 +1,48 @@
+version: '3.8'
+name: async_audio_chat
+services:
+  app:
+    image: async_audio_chat:v1
+    ports:
+      - "51308:5000"
+    volumes:
+      - .:/app
+      - /mnt/wslg/:/mnt/wslg/
+      - ${XDG_RUNTIME_DIR}/pulse:/run/pulse:ro
+    working_dir: /app
+    command: >
+      sh -c "while true; do sleep 1; done"
+    environment:
+      - PYTHONUNBUFFERED=1
+      - OLLAMA_HOST=http://ollama:11434
+      - PULSE_SERVER=${PULSE_SERVER}
+      - XDG_RUNTIME_DIR=/run/user/1000
+      - DISPLAY=${DISPLAY}
+    group_add:
+      - audio
+    devices:
+      - /dev/snd:/dev/snd
+    privileged: true
+    depends_on:
+      - ollama
+
+  ollama:
+    image: ollama/ollama
+    volumes:
+      - ollama:/root/.ollama
+    ports:
+      - "11434:11434"
+    shm_size: '32gb'
+    runtime: nvidia
+    environment:
+      - CUDA_VISIBLE_DEVICES=1
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - driver: nvidia
+              count: all
+              capabilities: [gpu]
+
+volumes:
+  ollama:

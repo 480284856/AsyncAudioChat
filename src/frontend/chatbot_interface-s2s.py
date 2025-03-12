@@ -59,7 +59,7 @@ class LLM(LLM):
                     text = response_delta[:punctuation_index + 1]    # 截取这段文本
                     old_total_response += text                  # 拼接到old_total_response对象右侧
                     self.text_queue.put(text)               # 把这段文本放入到text队列中
-                    LOGGER.info("LLM: new sentence: {}".format(old_total_response))
+                    # LOGGER.info("LLM: new sentence: {}".format(old_total_response))
                     
                     # 如果response_delta中存在不止一个符号，那么我们在做完第一个符号对应的工作后，把response_delta更新为去掉第一段文本的剩下文本，然后进行同样的操作。
                     response_delta = response_delta[punctuation_index + 1:]
