@@ -9,16 +9,23 @@ import logging
 import threading
 import multiprocessing
 
+from typing import List
+from pygame import mixer
+from zijie_tts import tts
+from threading import Thread
+from ali_tts import AliTTSSpeaker
+from zijie_stt import zijie_stt_gradio
+from langchain_ollama import ChatOllama 
 from flask import Flask, request,send_file, make_response,after_this_request
+
 
 from aliyunsdkcore.client import AcsClient
 from aliyunsdkcore.acs_exception.exceptions import ClientException
 from aliyunsdkcore.acs_exception.exceptions import ServerException
 from aliyunsdknlp_automl.request.v20191111 import RunPreTrainServiceRequest
 
+
 # Aliyun Machine Translation
-from typing import List
-from threading import Thread
 from alibabacloud_tea_util import models as util_models
 from alibabacloud_tea_util.client import Client as UtilClient
 from alibabacloud_tea_openapi import models as open_api_models
@@ -26,14 +33,12 @@ from alibabacloud_alimt20181012.models import TranslateGeneralResponse
 from alibabacloud_alimt20181012 import models as alimt_20181012_models
 from alibabacloud_alimt20181012.client import Client as alimt20181012Client
 
+
+
 sys.path.append(
-    os.path.dirname(os.path.abspath(__file__))
+    os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 )
 
-from pygame import mixer
-from zijie_tts import tts
-from langchain_ollama import ChatOllama 
-from zijie_stt import zijie_stt_gradio
 # from ali_stt_voice_awake import lingji_stt_gradio_va
 END = None  # 使用None表示结束标识符
 OUTPUT_LOG_DEBUG = True # 是否输出日志
@@ -62,8 +67,27 @@ def get_logger():
 
     return logger
 
+def load_config():
+    """
+    检测当前文件的目录下是否有"config.json"文件，如果有的话，则解析，并放到环境变量中。
+    """
+    config_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'config.json')
+    if os.path.exists(config_path):
+        try:
+            with open(config_path, 'r') as f:
+                config = json.load(f)
+                for key, value in config.items():
+                    os.environ[key] = str(value)
+                LOGGER.info(f"Loaded config from {config_path}")
+        except Exception as e:
+            LOGGER.error(f"Error loading config from {config_path}: {e}")
+    else:
+        LOGGER.warning(f"Config file not found at {config_path}")
+
 LOGGER = get_logger()
+load_config()
 app = Flask(__name__)
+
 
 class STT(threading.Thread):
     def __init__(self, stt_api, text, *args, **kwargs):
@@ -187,14 +211,14 @@ class LLM(threading.Thread):
             current_total_response += response_token
             response_delta = self.__remove_first_match(current_total_response, old_total_response)
 
-            # 我们对response_delta进行这样的操作，从左到右，判断其是否有有‘，。！？’等符号，如果有的话，就从左到右，从开头到这个符号为止，截取这段文本，然后把这段文本放入到text队列中，以及拼接到old_total_response对象右侧。如果没有，则不做操作。
+            # 我们对response_delta进行这样的操作，从左到右，判断其是否有有'，。！？'等符号，如果有的话，就从左到右，从开头到这个符号为止，截取这段文本，然后把这段文本放入到text队列中，以及拼接到old_total_response对象右侧。如果没有，则不做操作。
             while response_delta:
                 # 找到第一个标点符号的位置
                 ## i for i in xxx, 叫做生成器表达式，使用圆括号包裹生成器表达式，表示这是一个generator，而使用[]或{}的话，则表示是一个列表或集合表达式，
                 ## 前者不会把for表达式执行完，然后返回结果，而是返回一个generator对象，只有在遍历这个对象（比如使用next方法）的时候才会执行for表达式，然后返回结果。
                 ## 而列表或集合表达式会立即执行for表达式，然后返回结果。
                 ## 返回generator的方式称为惰性计算，只有在需要的时候才把值放到内存中。每次迭代时，生成器都会返回一个值，然后记住当前位置，下次遍历这个生成器时，则会从之前记住的位置的下一个位置开始便利。
-                ## 不把英文的'.'算入截断标点符号中，因为大模型生成的文本中，标题会用到'.'，比如‘6.’
+                ## 不把英文的'.'算入截断标点符号中，因为大模型生成的文本中，标题会用到'.'，比如'6.'
                 punctuation_index = next((i for i, char in enumerate(response_delta) if char in [',' , '，', '。', '！', '？', '!', '?']), -1)
                 if punctuation_index != -1:                          # 如果生成器表达式不是空的，即找的到第一个标点符号
                     text = response_delta[:punctuation_index + 1]    # 截取这段文本
@@ -205,7 +229,7 @@ class LLM(threading.Thread):
                     # 如果response_delta中存在不止一个符号，那么我们在做完第一个符号对应的工作后，把response_delta更新为去掉第一段文本的剩下文本，然后进行同样的操作。
                     response_delta = response_delta[punctuation_index + 1:]
                 
-                # 如果response_delta没有‘，。！？’等符号了，则不做操作。
+                # 如果response_delta没有'，。！？'等符号了，则不做操作。
                 if punctuation_index==-1:
                     break
         
@@ -228,6 +252,23 @@ class LLM(threading.Thread):
         response_iterator = self._run(self.query, *(self.args_for_run), **(self.kwargs_for_run))
 
         self._run2(response_iterator, *(self.args_for_run), **(self.kwargs_for_run))
+
+class LLM4AliTTSSpeaker(LLM):
+    
+    def _LLM__run2_ollama(self, llm_iterator, *args, **kwargs):
+        for response_token in llm_iterator:
+            response_token = response_token.content
+            
+            self.text_queue.put({
+                "type": "message",
+                "content": response_token
+            })
+        
+        # 生成完成后，往队列中放入一个END结束标识符。
+        self.text_queue.put({
+            "type": "end",
+            "content": END
+        })
 
 class TTS(threading.Thread):
     def __init__(self, text_queue: queue.Queue, audio_queue: queue.Queue, *args, **kwargs):
@@ -566,6 +607,44 @@ class Backend(threading.Thread):
         except:
             pass
 
+class Backend4AliTTSSpeaker(threading.Thread):
+    def __init__(self, *args, **kwargs):
+        """把整个异步对话模块整合成一个线程。"""
+        super().__init__(daemon=True)
+        self.text = kwargs.get("text", {"text": None})
+        self.text_queue = queue.Queue()
+
+        with open(os.path.join(os.path.dirname(os.path.abspath(__file__)), 'config.json')) as F:
+            _args = json.load(F)
+            self._ollama_model_name = _args['model_name']
+            self._ollama_base_url = _args['llm_url']
+            for key,value in _args.items():
+                os.environ[key] = value
+                
+        self.stt_thread = STT(zijie_stt_gradio, self.text)
+        self.input_preprocessing_thread = InputProcess(self.text, kwargs.get("history", None))
+        self.llm_thread = LLM4AliTTSSpeaker(self.text, self.text_queue, ollama_model_name=self._ollama_model_name, ollama_base_url=self._ollama_base_url)
+        self.ali_tts_thread = AliTTSSpeaker(self.text_queue)
+
+    def run(self,):
+        try:
+            self.stt_thread.start()
+            self.stt_thread.join()
+            
+            self.input_preprocessing_thread.start()
+            self.input_preprocessing_thread.join()
+            
+            self.llm_thread.start()
+            self.ali_tts_thread.start()
+
+            self.llm_thread.join()
+
+            self.text_queue.join()
+
+            self.ali_tts_thread.stop()
+        except:
+            pass
+
 class ContextMonitorBackend(Backend):
     def __init__(self, prepared_text:str=PREPARED_TEXT, *args, **kwargs):
         super().__init__(*args, **kwargs)
@@ -803,11 +882,12 @@ class VoiceAwakeBackend(multiprocessing.Process):
 
 if __name__ == "__main__":
     
-    main_thread = VoiceAwakeBackend("你好", time_to_sleep=5)
+    # main_thread = VoiceAwakeBackend("你好", time_to_sleep=5)
     # main_thread = Backend()
     # main_thread = ContextMonitorBackend()
     # main_thread = PureEnglishChatBackend(input_type="zh")
     # main_thread = PureEnglishChatBackend()
+    main_thread = Backend4AliTTSSpeaker()
     main_thread.start()
     main_thread.join()
     
