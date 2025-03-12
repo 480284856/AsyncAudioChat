@@ -33,8 +33,8 @@ sys.path.append(
 from pygame import mixer
 from zijie_tts import tts
 from langchain_ollama import ChatOllama 
-from ali_stt_voice_awake import lingji_stt_gradio_va
 from zijie_stt import zijie_stt_gradio
+# from ali_stt_voice_awake import lingji_stt_gradio_va
 END = None  # 使用None表示结束标识符
 OUTPUT_LOG_DEBUG = True # 是否输出日志
 PREPARED_TEXT = "你好，此次输入不合规，顾不做回答（此次对话不会记录到聊天记录中）。" # 内容审核模块，如果输入不合规，则输出默认回复

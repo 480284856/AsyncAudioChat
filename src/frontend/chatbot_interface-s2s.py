@@ -13,8 +13,8 @@ from typing import Generator
 sys.path.append(
     os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 )
-from AsyncAudioChat import Backend,LLM,STT,LOGGER,END,lingji_stt_gradio_va,ContextMonitorBackend,ContextMonitor,PREPARED_TEXT,PureEnglishChatBackend
-
+from AsyncAudioChat import Backend,LLM,STT,LOGGER,END,ContextMonitorBackend,ContextMonitor,PREPARED_TEXT,PureEnglishChatBackend #,lingji_stt_gradio_va
+from zijie_stt import zijie_stt_gradio
 class STT(STT):
     def __init__(self, stt_api, text, *args, **kwargs):
         super().__init__(stt_api, text, *args, **kwargs)
@@ -80,7 +80,7 @@ class Backend(PureEnglishChatBackend):
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
         
-        self.stt_thread = STT(lingji_stt_gradio_va, self.text, stt_for_web_display=kwargs['stt_for_web_display'])
+        self.stt_thread = STT(zijie_stt_gradio, self.text, stt_for_web_display=kwargs['stt_for_web_display'])
         self.llm_thread = LLM(self.text, self.text_queue, ollama_model_name=self._ollama_model_name, ollama_base_url=self._ollama_base_url, response_for_web_display=kwargs['response_for_web_display'])
         
         self.stt_for_web_display = self.stt_thread.stt_for_web_display
