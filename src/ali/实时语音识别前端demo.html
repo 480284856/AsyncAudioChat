@@ -1,0 +1,188 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>实时语音识别</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            margin: 20px;
+        }
+        #status {
+            margin-bottom: 10px;
+            color: green;
+        }
+        #messages {
+            border: 1px solid #ccc;
+            padding: 10px;
+            height: 200px;
+            overflow-y: scroll;
+            margin-bottom: 10px;
+        }
+        button {
+            margin: 5px;
+        }
+    </style>
+</head>
+<body>
+    <h1>实时语音识别</h1>
+    <div>
+        <label for="appkey">AppKey:</label>
+        <input type="text" id="appkey" placeholder="请输入 AppKey">
+    </div>
+    <div>
+        <label for="token">Token:</label>
+        <input type="text" id="token" placeholder="请输入 Token">
+    </div>
+    <div id="status">未连接</div>
+    <div id="messages"></div>
+    <button onclick="connectWebSocket()">开始连接</button>
+    <button onclick="startRecording()" disabled id="startButton">开始录音</button>
+    <button onclick="stopRecording()" disabled id="stopButton">停止录音</button>
+    <button onclick="disconnectWebSocket()" disabled id="disconnectButton">断开连接</button>
+    <script>
+        let websocket;
+        let audioContext;
+        let scriptProcessor;
+        let audioInput;
+        let audioStream;
+
+        // 更新连接状态
+        function updateStatus(status) {
+            document.getElementById('status').textContent = status;
+            document.getElementById('status').style.color = status === '已连接' ? 'green' : 'red';
+        }
+
+        // 生成 UUID
+        function generateUUID() {
+            return ([1e7] + -1e3 + -4e3 + -8e3 + -1e11).replace(/[018]/g, c =>
+                (c ^ crypto.getRandomValues(new Uint8Array(1))[0] & 15 >> c / 4).toString(16)
+            ).replace(/-/g, '');
+        }
+
+        // 打开WebSocket连接
+        function connectWebSocket() {
+            const appkey = document.getElementById('appkey').value;
+            const token = document.getElementById('token').value;
+            const socketUrl = `wss://nls-gateway.cn-shanghai.aliyuncs.com/ws/v1?token=${token}`;
+            
+            websocket = new WebSocket(socketUrl);
+            websocket.onopen = function() {
+                updateStatus('已连接');
+                logMessage('连接到 WebSocket 服务器');
+
+                var startTranscriptionMessage = {
+                    header: {
+                        appkey: appkey,
+                        namespace: "SpeechTranscriber",
+                        name: "StartTranscription",
+                        task_id: generateUUID(),
+                        message_id: generateUUID()
+                    },
+                    payload: {
+                        "format": "pcm",
+                        "sample_rate": 16000,
+                        "enable_intermediate_result": true,
+                        "enable_punctuation_prediction": true,
+                        "enable_inverse_text_normalization": true
+                    }
+                };
+
+                websocket.send(JSON.stringify(startTranscriptionMessage));
+            };
+
+            websocket.onmessage = function(event) {
+                logMessage('服务端: ' + event.data);
+
+                const message = JSON.parse(event.data);
+                if (message.header.name === "TranscriptionStarted") {
+                    // 启用开始录音按钮
+                    document.getElementById('startButton').disabled = false;
+                    document.getElementById('stopButton').disabled = false;
+                }
+            };
+
+            websocket.onerror = function(event) {
+                updateStatus('错误');
+                logMessage('WebSocket 错误: ' + event);
+            };
+
+            websocket.onclose = function() {
+                updateStatus('断开连接');
+                logMessage('与 WebSocket 服务器断开');
+            };
+
+            document.getElementById('disconnectButton').disabled = false;
+        }
+
+        // 断开WebSocket连接
+        function disconnectWebSocket() {
+            if (websocket) {
+                websocket.close();
+            }
+            document.getElementById('disconnectButton').disabled = true;
+            updateStatus('未连接');
+        }
+
+        // 日志消息
+        function logMessage(message) {
+            const messagesDiv = document.getElementById('messages');
+            const messageElement = document.createElement('div');
+            messageElement.textContent = message;
+            messagesDiv.appendChild(messageElement);
+            messagesDiv.scrollTop = messagesDiv.scrollHeight;
+        }
+
+        // 开始录音
+        async function startRecording() {
+            try {
+                // 获取音频输入设备
+                audioStream = await navigator.mediaDevices.getUserMedia({ audio: true });
+                audioContext = new (window.AudioContext || window.webkitAudioContext)({
+                    sampleRate: 16000
+                });
+                audioInput = audioContext.createMediaStreamSource(audioStream);
+
+                // 设置缓冲区大小为2048的脚本处理器
+                scriptProcessor = audioContext.createScriptProcessor(2048, 1, 1);
+
+                scriptProcessor.onaudioprocess = function(event) {
+                    const inputData = event.inputBuffer.getChannelData(0);
+                    const inputData16 = new Int16Array(inputData.length);
+                    for (let i = 0; i < inputData.length; ++i) {
+                        inputData16[i] = Math.max(-1, Math.min(1, inputData[i])) * 0x7FFF; // PCM 16-bit
+                    }
+                    if (websocket && websocket.readyState === WebSocket.OPEN) {
+                        websocket.send(inputData16.buffer);
+                        logMessage('发送音频数据块');
+                    }
+                };
+
+                audioInput.connect(scriptProcessor);
+                scriptProcessor.connect(audioContext.destination);
+            } catch (e) {
+                logMessage('录音失败: ' + e);
+            }
+        }
+
+        // 停止录音
+        function stopRecording() {
+            if (scriptProcessor) {
+                scriptProcessor.disconnect();
+            }
+            if (audioInput) {
+                audioInput.disconnect();
+            }
+            if (audioStream) {
+                audioStream.getTracks().forEach(track => track.stop());
+            }
+            if (audioContext) {
+                audioContext.close();
+            }
+            document.getElementById('startButton').disabled = true;
+            document.getElementById('stopButton').disabled = true;
+        }
+    </script>
+</body>
+</html>

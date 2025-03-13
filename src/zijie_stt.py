@@ -373,7 +373,7 @@ def _zijie_stt_gradio(audio_path, audio_format='wav'):
     try:
         return result['result']['payload_msg']['result'][0]['text']
     except:
-        return "周围太吵啦，听不清楚"
+        return "你说的什么？"
 
 
 def record_audio(audio_path, max_duration=15, silence_threshold=1500, silence_duration=1.2, sample_rate=16000, channels=1):

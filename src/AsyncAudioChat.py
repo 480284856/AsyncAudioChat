@@ -9,6 +9,10 @@ import logging
 import threading
 import multiprocessing
 
+sys.path.append(
+    os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+)
+
 from typing import List
 from pygame import mixer
 from zijie_tts import tts
@@ -16,6 +20,7 @@ from threading import Thread
 from ali_tts import AliTTSSpeaker
 from zijie_stt import zijie_stt_gradio
 from langchain_ollama import ChatOllama 
+from ali.realtime_speech_recognition import ali_rstt
 from flask import Flask, request,send_file, make_response,after_this_request
 
 
@@ -34,10 +39,6 @@ from alibabacloud_alimt20181012 import models as alimt_20181012_models
 from alibabacloud_alimt20181012.client import Client as alimt20181012Client
 
 
-
-sys.path.append(
-    os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
-)
 
 # from ali_stt_voice_awake import lingji_stt_gradio_va
 END = None  # 使用None表示结束标识符
@@ -89,6 +90,7 @@ load_config()
 app = Flask(__name__)
 
 
+
 class STT(threading.Thread):
     def __init__(self, stt_api, text, *args, **kwargs):
         super().__init__(daemon=True)
@@ -104,6 +106,19 @@ class STT(threading.Thread):
 
         # import random
         # self.text['text'] = random.choice(["你好", "你是谁?"])
+
+class STT4AliRSTT(STT):
+    '''
+    为阿里的实时语音识别专门定制的STT模块。
+    ----
+    在ali_rstt中，进入`name == "SentenceEnd"`分支后，需要消耗几秒钟才结束。所以我们可以直接在self.text被赋值后，就开始后面的处理。
+    '''
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+
+    def run(self):
+        '''STT模块接收用户的语音输入，并保存转录好的文本。'''
+        self.stt_api(*(self.args_for_run), **(self.kwargs_for_run))
 
 class RemoteSTT(STT):
     def __init__(self, stt_api_for_1file, text, *args, **kwargs):
@@ -645,6 +660,40 @@ class Backend4AliTTSSpeaker(threading.Thread):
         except:
             pass
 
+class Backend4AliRSTTAliTTSSpeaker(Backend4AliTTSSpeaker):
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+
+        # wrap self.text to ali_rstt
+        self.stt_thread = STT4AliRSTT(ali_rstt, self.text, stt_text=self.text)
+
+    def run(self,):
+        '''
+        在ali_rstt中，进入`name == "SentenceEnd"`分支后，需要消耗几秒钟才结束。所以我们可以直接在self.text被赋值后，就开始后面的处理。
+        '''
+        try:
+            self.stt_thread.start()
+
+            # 等待进入realtime_speech_recognition.py中的name == "SentenceEnd"分支。
+            # 当进入该分支时，self.text['text']被赋值。
+            # 在此之后可以直接进行后面的处理，因为在此之后，ali_rstt还需要运行几秒钟。
+            while self.text['text'] == None:
+                time.sleep(0.01)
+            
+            self.input_preprocessing_thread.start()
+            self.input_preprocessing_thread.join()
+            
+            self.llm_thread.start()
+            self.ali_tts_thread.start()
+
+            self.llm_thread.join()
+
+            self.text_queue.join()
+
+            self.ali_tts_thread.stop()
+        except:
+            pass
+
 class ContextMonitorBackend(Backend):
     def __init__(self, prepared_text:str=PREPARED_TEXT, *args, **kwargs):
         super().__init__(*args, **kwargs)
@@ -887,7 +936,8 @@ if __name__ == "__main__":
     # main_thread = ContextMonitorBackend()
     # main_thread = PureEnglishChatBackend(input_type="zh")
     # main_thread = PureEnglishChatBackend()
-    main_thread = Backend4AliTTSSpeaker()
+    # main_thread = Backend4AliTTSSpeaker()
+    main_thread = Backend4AliRSTTAliTTSSpeaker()
     main_thread.start()
     main_thread.join()
     

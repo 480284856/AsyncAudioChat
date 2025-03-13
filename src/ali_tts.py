@@ -12,6 +12,7 @@
 # Microsoft Windows
 #   python -m pip install pyaudio
 
+import logging
 import pyaudio
 import dashscope
 import threading
@@ -22,20 +23,45 @@ from dashscope.audio.tts_v2 import *
 
 from http import HTTPStatus
 from dashscope import Generation
-# from AsyncAudioChat_test import load_config, END
-END = None
+# END = None
 # 若没有将API Key配置到环境变量中，需将下面这行代码注释放开，并将apiKey替换为自己的API Key
 dashscope.api_key = "sk-8deaaacf2fb34929a076dfc993273195"
 model = "cosyvoice-v1"
-voice = "longxiaocheng"
+# voice = "longxiaocheng"
+voice = "longxiaochun"
+# voice = "longyue"
 
+def get_logger():
+    # 日志收集器
+    logger = logging.getLogger(__name__)
+    logger.setLevel(logging.DEBUG)
+    
+    # Avoid passing messages to the root logger
+    logger.propagate = False
+    
+    # If the logger already has handlers, avoid adding duplicate ones
+    if not logger.hasHandlers():
+        # 设置控制台处理器，当logger被调用时，控制台处理器额外输出被调用的位置。
+        # 创建一个控制台处理器并设置级别为DEBUG
+        ch = logging.StreamHandler()
+        ch.setLevel(logging.DEBUG)
+        # 创建一个格式化器，并设置格式包括文件名和行号
+        formatter = logging.Formatter('%(asctime)s - %(name)s - %(levelname)s - %(pathname)s:%(lineno)d - %(message)s')
+        ch.setFormatter(formatter)
+
+        # 将处理器添加到logger
+        logger.addHandler(ch)
+
+    return logger
+
+LOGGER = get_logger()
 
 class Callback(ResultCallback):
     _player = None
     _stream = None
 
     def on_open(self):
-        print("websocket is open.")
+        LOGGER.info("websocket is open.")
         self._player = pyaudio.PyAudio()
         self._stream = self._player.open(
             format=pyaudio.paInt16,
@@ -46,23 +72,23 @@ class Callback(ResultCallback):
         )
 
     def on_complete(self):
-        print("speech synthesis task complete successfully.")
+        LOGGER.info("speech synthesis task complete successfully.")
 
     def on_error(self, message: str):
-        print(f"speech synthesis task failed, {message}")
+        LOGGER.error(f"speech synthesis task failed, {message}")
 
     def on_close(self):
-        print("websocket is closed.")
+        LOGGER.info("websocket is closed.")
         # stop player
         self._stream.stop_stream()
         self._stream.close()
         self._player.terminate()
 
     def on_event(self, message):
-        print(f"recv speech synthsis message {message}")
+        LOGGER.info(f"recv speech synthsis message {message}")
 
     def on_data(self, data: bytes) -> None:
-        print("audio result length:", len(data))
+        LOGGER.info(f"audio result length: {len(data)}")
         # Write data in smaller chunks to prevent underruns
         chunk_size = 1024
         for i in range(0, len(data), chunk_size):
@@ -82,20 +108,42 @@ class AliTTSSpeaker(threading.Thread):
         super().__init__(daemon=True)
         self.text_queue = text_queue
         self.callback = Callback()
-        self.synthesizer = SpeechSynthesizer(
-            model=model,
-            voice=voice,
-            format=AudioFormat.PCM_22050HZ_MONO_16BIT,
-            callback=self.callback,
-        )
+        self.synthesizer = None  # Initialize as None
         self.running = True
     
+    def connect(self):
+        """Explicitly establish the TTS connection"""
+        try:
+            # Close any existing connection first
+            if self.synthesizer:
+                try:
+                    self.synthesizer.streaming_complete()
+                except Exception as e:
+                    LOGGER.warning(f"Error closing existing synthesizer: {str(e)}")
+                    
+            # Create a new synthesizer instance
+            self.synthesizer = SpeechSynthesizer(
+                model=model,
+                voice=voice,
+                format=AudioFormat.PCM_22050HZ_MONO_16BIT,
+                callback=self.callback,
+            )
+            return True
+        except Exception as e:
+            LOGGER.error(f"Failed to connect TTS service: {str(e)}")
+            return False
+
     def run(self):
         """Main thread method that processes messages from the queue"""
+        # Ensure connection is established before processing
+        if not self.connect():
+            LOGGER.error("Failed to establish TTS connection, exiting thread")
+            return
+            
         while self.running:
             try:
-                # Get message from queue, with a timeout to allow checking self.running
-                message = self.text_queue.get(timeout=0.5)
+                # Process messages as before
+                message = self.text_queue.get(timeout=0.01)
                 
                 if message["type"] == "end":
                     # End of message stream
@@ -106,23 +154,37 @@ class AliTTSSpeaker(threading.Thread):
                     content = message["content"]
                     if content:
                         print(f"TTS processing: {content}")
-                        self.synthesizer.streaming_call(content)
+                        # Try to reconnect if connection is lost
+                        try:
+                            self.synthesizer.streaming_call(content)
+                        except Exception as e:
+                            LOGGER.error(f"TTS connection error: {str(e)}")
+                            if "synthesizer has not been started" in str(e) or "socket is already closed" in str(e):
+                                LOGGER.info("Attempting to reconnect TTS service...")
+                                if self.connect():
+                                    # Try again with the reconnected service
+                                    self.synthesizer.streaming_call(content)
                 
-                # Mark task as complete
-                # 告诉队列一个消息已经被处理完毕，但不关心具体是哪个消息
                 self.text_queue.task_done()
                 
             except queue.Empty:
-                # Queue timeout, just continue and check running status
                 continue
             except Exception as e:
-                print(f"Error in TTS speaker: {str(e)}")
+                LOGGER.error(f"Error in TTS speaker: {str(e)}")
     
     def stop(self):
-        """Stop the speaker thread"""
+        """Stop the speaker thread and clean up resources"""
         self.running = False
+        
+        # Explicitly close the connection
+        if self.synthesizer:
+            try:
+                self.synthesizer.streaming_complete()
+            except Exception as e:
+                LOGGER.warning(f"Error during synthesizer shutdown: {str(e)}")
+                
         if self.is_alive():
-            self.join(timeout=2)
+            self.join()
 
 
 def synthesizer_with_llm():
@@ -170,7 +232,7 @@ def tts_speaker_example():
     text_queue.put({"type": "message", "content": "你好，我是一个AI助手。"})
     text_queue.put({"type": "message", "content": "我可以帮助你回答问题，提供信息。"})
     text_queue.put({"type": "message", "content": "需要什么帮助吗？"})
-    text_queue.put({"type": "end", "content": END})
+    text_queue.put({"type": "end", "content": None})
     
     # Wait for queue to be processed
     text_queue.join()
