@@ -18,6 +18,9 @@
 首先，你需要在`src`文件夹中创建`config.json`文件并填写如下信息：
 ```json
 {
+    "ALIBABA_APPKEY": "xxx",                     // 阿里巴巴实时语音识别
+    "ALIBABA_TOKEN": "xxx",                      //  app key: https://nls-portal.console.aliyun.com/applist token: https://nls-portal.console.aliyun.com/overview
+
     "llm_url": "192.168.65.254:62707", // 模型的url，这里需要是使用Ollama部署的模型
     "model_name": "qwen2:0.5b",        // ollama中的模型的名称
     "zijie_tts_app_id": "xxx",         // 字节跳动的火山引擎的语音合成服务的app id

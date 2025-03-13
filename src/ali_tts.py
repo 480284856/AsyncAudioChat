@@ -13,6 +13,7 @@
 #   python -m pip install pyaudio
 
 import logging
+import os
 import pyaudio
 import dashscope
 import threading
@@ -24,8 +25,9 @@ from dashscope.audio.tts_v2 import *
 from http import HTTPStatus
 from dashscope import Generation
 # END = None
-# 若没有将API Key配置到环境变量中，需将下面这行代码注释放开，并将apiKey替换为自己的API Key
-dashscope.api_key = "sk-8deaaacf2fb34929a076dfc993273195"
+dashscope.api_key = os.environ.get("ALI_TTSSPEAKER")
+if dashscope.api_key==None:
+    raise "没有提供密钥，请参考https://bailian.console.aliyun.com/?apiKey=1#/api-key"
 model = "cosyvoice-v1"
 # voice = "longxiaocheng"
 voice = "longxiaochun"
